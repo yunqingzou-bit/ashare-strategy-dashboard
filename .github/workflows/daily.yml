@@ -39,10 +39,6 @@ jobs:
           mkdir -p backups
           cp data/result.json "backups/result-${DATE}.json"
           cp data/final.json "backups/final-${DATE}.json"
-          python - <<'PY'
-          import json, os
-          p = 'backups/final-' + os.environ.get('DATE','') + '.json'
-          PY
           ls -l backups | tail -6
           find backups -type f -mtime +180 -delete || true
       - name: commit and push
