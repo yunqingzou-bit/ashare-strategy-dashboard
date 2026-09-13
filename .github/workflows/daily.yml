@@ -27,6 +27,25 @@ jobs:
       - run: pip install -r requirements.txt
       - name: run pipeline
         run: python scripts/update.py --days 45
+      - name: restore growth-value cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/garp-cache
+          key: garp-${{ github.run_id }}
+          restore-keys: |
+            garp-
+      - name: acquire statements and raw close prices
+        continue-on-error: true
+        run: python scripts/garp_bulk.py --refresh
+      - name: build growth-value page
+        continue-on-error: true
+        run: python scripts/build_garp.py
+      - name: save growth-value cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/garp-cache
+          key: garp-${{ github.run_id }}
       - name: save event cache
         if: always()
         uses: actions/cache/save@v4
@@ -39,6 +58,7 @@ jobs:
           mkdir -p backups
           cp data/result.json "backups/result-${DATE}.json"
           cp data/final.json "backups/final-${DATE}.json"
+          cp docs/garp.json "backups/garp-${DATE}.json"
           ls -l backups | tail -6
           find backups -type f -mtime +180 -delete || true
       - name: commit and push

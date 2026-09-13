@@ -210,7 +210,7 @@ H.append('<meta name="viewport" content="width=device-width,initial-scale=1"><ti
 H.append('<style>' + css + '</style></head><body><div class="wrap">')
 H.append('<h1>表格版 · A股选股策略回测结果</h1>')
 H.append('<div class="meta">' + rng + ' · 全市场5562只 · ' + str(len(picks)) + ' 只标的 · ' + str(len(dates)) + ' 个交易日 · 表头下拉筛选可直接用（无 JS 时显示全部）</div>')
-H.append('<div class="nav"><a href="index.html">← 返回看板</a><a href="#m1">主表</a><a href="#m2">每日组合汇总</a><a href="#m3">事件专表</a><a href="#m4">统计评估</a></div>')
+H.append('<div class="nav"><a href="index.html">← 返回看板</a><a href="garp.html">成长价值筛选（新）</a><a href="#m1">主表</a><a href="#m2">每日组合汇总</a><a href="#m3">事件专表</a><a href="#m4">统计评估</a></div>')
 H.append('<h2 id="m1">主表 · 每只入选股票单独一行<span>胜率＝5个交易日中的上涨天数占比；「当日涨幅」＝选股当天涨幅</span></h2>')
 H.append('<div class="bar"><button id="rst1">重置全部筛选</button><span id="cnt1">命中 ' + str(len(picks)) + ' / ' + str(len(picks)) + ' 行</span></div>')
 H.append('<div class="scroll"><table data-filters="1" data-cnt="cnt1" data-reset="rst1"><thead>' + h_main + '</thead><tbody>' + ''.join(main_rows) + '</tbody></table></div>' + dl)

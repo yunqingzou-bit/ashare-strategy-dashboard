@@ -120,7 +120,7 @@ H.append('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">')
 H.append('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">')
 H.append('<meta name="theme-color" content="#0f172a"><title>选股策略回测看板 2026-07-13~09-11</title>')
 H.append('<style>' + open('scripts/assets/dash.css', encoding='utf-8').read() + CSSADD + '</style><noscript><style>.sec{display:block!important}.tabs{display:none}</style></noscript></head><body>')
-H.append('<header class="top"><div class="in"><h1>A股选股策略回测看板</h1><a href="tables.html" style="float:right;font-size:12px;color:#bfdbfe;text-decoration:none;border:1px solid #60a5fa;padding:3px 10px;border-radius:8px">表格版 →</a><div class="sub">' + R['window'][0] + ' ~ ' + R['window'][1]
+H.append('<header class="top"><div class="in"><h1>A股选股策略回测看板</h1><a href="garp.html" style="float:right;margin-right:6px;font-size:12px;color:#bbf7d0;text-decoration:none;border:1px solid #4ade80;padding:3px 10px;border-radius:8px">成长价值筛选 →</a><a href="tables.html" style="float:right;font-size:12px;color:#bfdbfe;text-decoration:none;border:1px solid #60a5fa;padding:3px 10px;border-radius:8px">表格版 →</a><div class="sub">' + R['window'][0] + ' ~ ' + R['window'][1]
          + ' · 全市场5562只 · 225只标的 · 数据源：同花顺前复权 + 东方财富涨停池/龙虎榜/公告</div></div></header>')
 H.append('<div class="wrap"><div class="kpis">' + kpis + '</div>')
 H.append('<div class="card"><h2>每日选股组合的5日累计收益（等权5只）<span>红=正 绿=负 · 悬停看数值</span></h2><div class="bd"><div class="chart">' + ''.join(bars) + '</div><div class="axis"><span>' + dates[0][5:] + '</span><span>' + dates[len(dates)//2][5:] + '</span><span>' + dates[-1][5:] + '</span></div></div></div>')
