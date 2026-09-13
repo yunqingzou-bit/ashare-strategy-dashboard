@@ -34,10 +34,39 @@ def ths_line(code):
             except Exception:
                 time.sleep(0.2 * (att + 1))
     return None
+def universe():
+    H = {"Referer": "https://finance.sina.com.cn/"}
+    names = {}
+    url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+    for page in range(1, 90):
+        try:
+            txt = S.get(url, params={"page": page, "num": 100, "sort": "symbol", "asc": 1, "node": "hs_a", "symbol": "", "_s_r_a": "page"}, headers=H, timeout=25).text.strip()
+            if not txt.startswith("["):
+                break
+            rows = json.loads(txt)
+            if not rows:
+                break
+            for r in rows:
+                c = str(r.get("code") or "").zfill(6)
+                if len(c) == 6:
+                    names[c] = str(r.get("name") or "")
+        except Exception as e:
+            log("universe page", page, "failed", type(e).__name__)
+            break
+        if len(names) == 0 and page >= 3:
+            break
+    return names
 def refresh_bars():
-    import akshare as ak
-    df = ak.stock_info_a_code_name()
-    names = {str(r['code']).zfill(6): str(r['name']) for _, r in df.iterrows()}
+    names = universe()
+    log("universe from sina", len(names))
+    if len(names) < 3000:
+        try:
+            import akshare as ak
+            df = ak.stock_info_a_code_name()
+            names = {str(r["code"]).zfill(6): str(r["name"]) for _, r in df.iterrows()}
+            log("universe fallback akshare", len(names))
+        except Exception as e:
+            log("universe fallback failed", type(e).__name__)
     codes = sorted(names)
     log('universe', len(codes))
     t0 = time.time(); bars = {}; fail = []
