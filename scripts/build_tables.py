@@ -68,7 +68,7 @@ for p in picks:
 stocks = sorted({p['code'] + ' ' + str(p['name']) for p in picks})
 dl = '<datalist id="stklist">' + ''.join('<option value="' + q(s) + '"></option>' for s in stocks) + '</datalist>'
 h_main = ('<tr>'
-          + '<th>日期' + sel('date', [(d, d) for d in dates]) + '</th>'
+          + '<th>日期' + sel('date', [(d[5:], d) for d in dates]) + '</th>'
           + '<th>股票<input class="flt" data-k="stock" list="stklist" placeholder="输入或选择">' + sel('cls', CL) + '</th>'
           + '<th>当日涨幅' + sel('pct', PC) + '</th>'
           + '<th>D+1涨幅' + sel('d1', UP) + '</th><th>D+2涨幅' + sel('d2', UP) + '</th><th>D+3涨幅' + sel('d3', UP) + '</th>'
@@ -92,7 +92,8 @@ for p in sorted([x for x in picks if x['events']], key=lambda x: x['date']):
     ev_rows.append('<tr data-date="' + p['date'][5:] + '" data-ev="' + q(flags(p)) + '"><td>' + p['date'][5:] + '</td><td class="stk"><b>' + p['code'] + '</b> '
                    + esc(p['name']) + '</td><td class="ev">' + esc(' ; '.join(p['events'])) + '</td><td>' + cells + '</td><td class="n '
                    + pc(p['cum']) + '">' + pct(p['cum']) + '</td></tr>')
-h_ev = ('<tr><th>日期' + sel('date', [(d, d) for d in dates]) + '</th><th>股票</th><th>大事件' + sel('ev', EV) + '</th><th>D+1..D+5</th><th>5日累计</th></tr>')
+ev_dates = sorted({p['date'] for p in picks if p['events']})
+h_ev = ('<tr><th>日期' + sel('date', [(d[5:], d) for d in ev_dates]) + '</th><th>股票</th><th>大事件' + sel('ev', [x for x in EV if x[0] != 'none']) + '</th><th>D+1..D+5</th><th>5日累计</th></tr>')
 order = ['all', 'zt_first', 'zt_multi', 'breakout', 'trend', 'other', '2026-07', '2026-08', '2026-09']
 t41 = []
 for k in order:
@@ -159,7 +160,8 @@ js = '''(function(){
           if(!v) continue;
           var d=r.getAttribute('data-'+k)||'';
           if(k==='stock'){ if(d.toLowerCase().indexOf(v.toLowerCase())<0) ok=false; }
-          else if(k==='cls'||k==='date'){ if(d!==v) ok=false; }
+          else if(k='cls'){ if(d!==v) ok=false; }
+          else if(k='date'){ var d5=d.slice(-5), v5=v.slice(-5); if(!(d===v||d5===v5)) ok=false; }
           else if(k==='ev'){
             if(v==='has'){ if(d==='') ok=false; }
             else if(v==='none'){ if(d!=='') ok=false; }
