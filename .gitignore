@@ -1,0 +1,12 @@
+data/bars.json
+data/events.json
+data/result.json
+data/final.json
+data/report.md
+data/events/
+logs/
+__pycache__/
+*.pyc
+.env
+work/
+data/tables.md
