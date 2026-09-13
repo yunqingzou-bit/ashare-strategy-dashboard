@@ -3,7 +3,7 @@
 import argparse, os, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-STEPS = ['fetch.py', 'replay.py', 'report.py', 'build_site.py']
+STEPS = ['fetch.py', 'replay.py', 'report.py', 'build_site.py', 'build_tables.py']
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=45)
