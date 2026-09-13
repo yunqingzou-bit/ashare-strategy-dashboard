@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import json, os, sys, statistics as st
+import json, os, sys, time, statistics as st
 sys.stdout.reconfigure(encoding='utf-8')
 def load(p): return json.load(open(p, encoding='utf-8'))
 def fmt(x, n=2, na='-'):
@@ -43,7 +43,13 @@ for d, rows in notices.items():
         c = str(r.get(kc) or '').zfill(6)
         t = str(r.get(kt) or '')
         ty = str(r.get(kty) or '')
-        dd = ''.join(_c2 for _c2 in str(r.get(kd) or d) if _c2.isdigit())[:8]
+        _v = r.get(kd) or d
+        if isinstance(_v, (int, float)) and _v > 1000000000:
+            dd = time.strftime('%Y%m%d', time.localtime(float(_v) / 1000.0))
+        elif str(_v).isdigit() and len(str(_v)) > 10:
+            dd = time.strftime('%Y%m%d', time.localtime(float(_v) / 1000.0))
+        else:
+            dd = ''.join(_c2 for _c2 in str(_v) if _c2.isdigit())[:8]
         if not any(k in t or k in ty for k in KW): continue
         NOT.setdefault(c, {}).setdefault(dd, []).append((ty, t[:44]))
 def evts(row):
