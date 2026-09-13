@@ -46,7 +46,7 @@ for lab, v in vals:
 det = []
 for p in picks:
     ps = list(p['paths']) + [None]*(5-len(p['paths']))
-    tds = '<td data-l="日期">' + p['date'][5:] + '</td><td data-l="代码">' + p['code'] + '</td><td data-l="名称">' + esc(p['name']) + '</td>' + '<td data-l="当日涨幅" class="num " + pc(p['pct']) + ">" + pct(p['pct']) + '</td>'
+    tds = '<td data-l="日期">' + p['date'][5:] + '</td><td data-l="代码">' + p['code'] + '</td><td data-l="名称">' + esc(p['name']) + '</td>' + '<td data-l="当日涨幅" class="num ' + pc(p['pct']) + '">' + pct(p['pct']) + '</td>'
     tds += '<td data-l="评分" class="num">' + format(p['score'], '.1f') + '</td><td data-l="形态">' + CN.get(p['cls'], p['cls']) + '</td>'
     for _i, v in enumerate(ps):
         tds += '<td data-l="D+' + str(_i+1) + '" class="num ' + pc(v) + '">' + (pct(v, '-') if v is not None else '-') + '</td>'
