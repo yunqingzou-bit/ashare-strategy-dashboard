@@ -10,3 +10,4 @@ __pycache__/
 .env
 work/
 data/tables.md
+local-tools/
