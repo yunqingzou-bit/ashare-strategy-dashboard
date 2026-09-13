@@ -29,7 +29,7 @@ for d, rows in lhb.items():
         c = str(r.get(kc) or '').zfill(6)
         try: net = float(r.get(kn) or 0)
         except Exception: net = 0.0
-        LH.setdefault(c, {})[d] = net
+        LH.setdefault(c, {})[d.replace('-', '')] = (net, str(r.get(ki) or '')[:20])
 NOT = {}
 KW = ['业绩预告','业绩快报','中标','合同','收购','重组','增持','减持','回购','问询','立案',
       '停牌','风险提示','异动','分红','解禁','定增','激励','对外投资','重大','终止','诉讼']
@@ -43,7 +43,7 @@ for d, rows in notices.items():
         c = str(r.get(kc) or '').zfill(6)
         t = str(r.get(kt) or '')
         ty = str(r.get(kty) or '')
-        dd = str(r.get(kd) or d)
+        dd = str(r.get(kd) or d).replace('-', '')
         if not any(k in t or k in ty for k in KW): continue
         NOT.setdefault(c, {}).setdefault(dd, []).append((ty, t[:44]))
 def evts(row):
@@ -51,10 +51,10 @@ def evts(row):
     out = []
     for k in range(1, 6):
         if p+k >= len(v): break
-        dd = v[p+k][0]
+        dd = v[p+k][0].replace('-', '')
         pc = (v[p+k][2]/v[p+k-1][2]-1)*100
         if dd in LH.get(c, {}):
-            out.append('D+' + str(k) + ' 龙虎榜净买' + fmt(LH[c][dd]/1e8) + '亿')
+            out.append('D+' + str(k) + ' 龙虎榜净买' + fmt(LH[c][dd][0]/1e8) + '亿 ' + LH[c][dd][1])
         for ty, t in (NOT.get(c, {}).get(dd) or [])[:1]:
             out.append('D+' + str(k) + ' ' + (ty or '公告') + ':' + t)
         if pc >= 9.7: out.append('D+' + str(k) + ' 涨停')
