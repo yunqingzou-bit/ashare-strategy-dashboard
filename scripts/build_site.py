@@ -48,11 +48,19 @@ for p in picks:
     ps = list(p['paths']) + [None]*(5-len(p['paths']))
     tds = '<td data-l="日期">' + p['date'][5:] + '</td><td data-l="代码">' + p['code'] + '</td><td data-l="名称">' + esc(p['name']) + '</td>'
     tds += '<td data-l="评分" class="num">' + format(p['score'], '.1f') + '</td><td data-l="形态">' + CN.get(p['cls'], p['cls']) + '</td>'
-    for v in ps:
-        tds += '<td data-l="D+k" class="num ' + pc(v) + '">' + (pct(v, '-') if v is not None else '-') + '</td>'
+    for _i, v in enumerate(ps):
+        tds += '<td data-l="D+' + str(_i+1) + '" class="num ' + pc(v) + '">' + (pct(v, '-') if v is not None else '-') + '</td>'
     tds += '<td data-l="5日累计" class="num ' + pc(p['cum']) + '">' + pct(p['cum']) + '</td>'
     ev = esc(' ; '.join(p['events'])) if p['events'] else '-'
     tds += '<td data-l="关键事件" class="ev">' + ev + '</td>'
+    _up = sum(1 for x in p['paths'] if x > 0)
+    _tot = len(p['paths'])
+    if _tot:
+        _wr = str(_up) + '/' + str(_tot) + ' (' + format(_up / _tot * 100, '.0f') + '%)'
+        _c = ' pos' if _up / _tot >= 0.6 else (' neg' if _up / _tot <= 0.4 else '')
+    else:
+        _wr = '-'; _c = ''
+    tds += '<td data-l="胜率" class="num' + _c + '">' + _wr + '</td>'
     txt = (p['code'] + ' ' + str(p['name']) + ' ' + str(p.get('board') or '')).replace('"', '')
     det.append('<tr data-d="' + p['date'] + '" data-d1="' + ('%.4f' % p['paths'][0] if p['paths'] else '-999')
                + '" data-cum="' + ('%.4f' % p['cum'] if p['cum'] is not None else '-999')
@@ -120,7 +128,7 @@ H.append('<div class="tabs" id="tb"><button data-v="s1" class="on">每日选股<
 H.append('<section id="s1" class="sec on"><div class="card"><h2>表1 · 每个交易日选出的5只<span>共 ' + str(len(dates)) + ' 个交易日</span></h2><div class="bd"><div class="grid-days">' + ''.join(dayrows) + '</div></div></div></section>')
 H.append('<section id="s2" class="sec"><div class="card"><h2>表2 · 选后5个交易日逐日涨跌幅<span id="cnt">共 ' + str(len(picks)) + ' 只</span></h2><div class="bd">')
 H.append('<div class="tools"><input id="q" placeholder="搜索代码 / 名称 / 行业"><select id="kf"><option value="">全部形态</option>' + ''.join('<option value="' + k + '">' + v + '</option>' for k, v in CN.items()) + '</select><select id="sk"><option value="d">按日期</option><option value="d1">按次日涨幅</option><option value="cum">按5日累计</option></select></div>')
-H.append('<div class="tw"><table class="resp"><thead><tr><th>日期</th><th>代码</th><th>名称</th><th>评分</th><th>形态</th><th>D+1</th><th>D+2</th><th>D+3</th><th>D+4</th><th>D+5</th><th>5日累计</th><th>5日内关键事件</th></tr></thead><tbody id="db">' + ''.join(det) + '</tbody></table></div></div></div></section>')
+H.append('<div class="tw"><table class="resp"><thead><tr><th>日期</th><th>代码</th><th>名称</th><th>评分</th><th>形态</th><th>D+1</th><th>D+2</th><th>D+3</th><th>D+4</th><th>D+5</th><th>5日累计</th><th>5日内关键事件</th><th>胜率</th></tr></thead><tbody id="db">' + ''.join(det) + '</tbody></table></div></div></div></section>')
 H.append('<section id="s3" class="sec"><div class="card"><h2>表3 · 持仓5日内出现的关键事件<span>' + str(len(evt)) + ' 条：龙虎榜净买额+席位性质+涨跌停/异动</span></h2><div class="bd"><div class="tw"><table class="resp"><thead><tr><th>日期</th><th>代码</th><th>名称</th><th>事件</th><th>D+1..D+5</th><th>5日累计</th></tr></thead><tbody>' + ''.join(evt) + '</tbody></table></div></div></div></section>')
 H.append('<section id="s4" class="sec">')
 H.append('<div class="card"><h2>表4.1 · 分组成功率 vs 基准<span>样本为选出的225只</span></h2><div class="bd"><div class="tw"><table class="resp"><thead><tr><th>分组</th><th>样本</th><th>次日上涨率</th><th>次日平均</th><th>次日再涨停率</th><th>5日上涨率</th><th>5日平均</th><th>5日中位数</th><th>5日最好/最差</th></tr></thead><tbody>' + ''.join(strows) + '</tbody></table></div></div></div>')
