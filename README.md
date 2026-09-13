@@ -32,26 +32,40 @@ python scripts/update.py --days 45
 
 ## 每日自动更新
 
-**采用本机计划任务方案**：脚本在本机抓数(数据源已验证可用) → 重建 `docs/index.html` → `git push`；GitHub Pages 在每次 push 后自动重新发布，无需额外工作流。
+**默认走云端 GitHub Actions，不依赖本机开关机。**
 
 | 项 | 值 |
 |---|---|
-| 触发 | 工作日 18:30（收盘后数据源已更新） |
-| 入口脚本 | `scripts/run_daily.ps1` |
-| 任务名 | `ashare-dashboard-daily` |
-| 日志 | `logs/update-YYYYMMDD-HHmm.log` |
-| 发布 | push 后 Pages 自动构建，约 30 秒 |
+| 工作流 | `.github/workflows/daily.yml` |
+| 触发 | 工作日 18:30（北京）= 10:30 UTC，另支持手动 `workflow_dispatch` |
+| 执行内容 | 抓数 → 回放 → 重建 `docs/index.html` → 自动 commit + push |
+| 发布 | push 后 GitHub Pages 自动重建（约 30 秒） |
+| 加速 | `actions/cache` 缓存 `data/events/`，日常运行只抓新交易日 |
+| 超时上限 | 150 分钟 |
 
-创建任务：
+### 云端数据源可达性（实测于 GitHub ubuntu-latest runner）
+
+| 数据源 | 用途 | 云端可达 |
+|---|---|---|
+| 新浪 `Market_Center.getHQNodeData` | 全 A 股名单 | ✅ |
+| 同花顺 `d.10jqka.com.cn` | 全市场前复权日线 | ✅ |
+| 东方财富 `push2ex` | 涨停/炸板/强势股池 | ✅ |
+| 东方财富 `datacenter-web` | 龙虎榜、两融 | ✅ |
+| 东方财富 `np-anotice-stock` | 公告 | ✅ |
+| 东方财富 `push2`(clist) | 全市场快照 | ❌ 502（未使用） |
+| 深交所 `szse.cn` | akshare 内置名单源 | ❌ 连接重置（已弃用） |
+
+> 关键点：`akshare.stock_info_a_code_name()` 依赖深交所/上交所接口，在 GitHub 托管 runner 上会被重置连接。本项目已改为**新浪分页取全 A 股名单**（`scripts/fetch.py` 的 `universe()`），akshare 仅作为本机兜底。
+
+### 本机兜底（可选，当前已停用）
+
+为避免与云端定时任务重复推送，本机计划任务 `ashare-dashboard-daily` 已停用；需要时：
 
 ```powershell
-schtasks /Create /TN "ashare-dashboard-daily" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 18:30 /TR "powershell -NoProfile -ExecutionPolicy Bypass -File <仓库路径>\scripts\run_daily.ps1" /F
-schtasks /Run /TN "ashare-dashboard-daily"     # 立即执行一次验证
-schtasks /Query /TN "ashare-dashboard-daily" /V /FO LIST
-schtasks /Delete /TN "ashare-dashboard-daily" /F   # 不再需要时删除
+schtasks /Change /TN "ashare-dashboard-daily" /ENABLE    # 启用（工作日 18:30）
+schtasks /Change /TN "ashare-dashboard-daily" /DISABLE   # 停用
+schtasks /Run /TN "ashare-dashboard-daily"               # 立即跑一次
 ```
-
-> 关于云端 GitHub Actions：本仓库曾配置 `daily.yml` 定时任务，但实测 GitHub 托管 runner 访问深交所/东方财富时被重置连接（`Connection reset by peer`），无法抓取数据，因此已移除。若坚持云端运行，需要自托管 runner。
 
 ## 数据源与口径
 
