@@ -111,7 +111,7 @@ H = []
 H.append('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">')
 H.append('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">')
 H.append('<meta name="theme-color" content="#0f172a"><title>选股策略回测看板 2026-07-13~09-11</title>')
-H.append('<style>' + open('scripts/assets/dash.css', encoding='utf-8').read() + CSSADD + '</style></head><body>')
+H.append('<style>' + open('scripts/assets/dash.css', encoding='utf-8').read() + CSSADD + '</style><noscript><style>.sec{display:block!important}.tabs{display:none}</style></noscript></head><body>')
 H.append('<header class="top"><div class="in"><h1>A股选股策略回测看板</h1><div class="sub">' + R['window'][0] + ' ~ ' + R['window'][1]
          + ' · 全市场5562只 · 225只标的 · 数据源：同花顺前复权 + 东方财富涨停池/龙虎榜/公告</div></div></header>')
 H.append('<div class="wrap"><div class="kpis">' + kpis + '</div>')
