@@ -33,12 +33,28 @@ jobs:
         with:
           path: data/events
           key: events-${{ github.run_id }}
+      - name: daily backup snapshot
+        run: |
+          DATE=$(date -u +%F)
+          mkdir -p backups
+          cp data/result.json "backups/result-${DATE}.json"
+          cp data/final.json "backups/final-${DATE}.json"
+          python - <<'PY'
+          import json, os
+          p = 'backups/final-' + os.environ.get('DATE','') + '.json'
+          PY
+          ls -l backups | tail -6
+          find backups -type f -mtime +180 -delete || true
       - name: commit and push
         run: |
+          DATE=$(date -u +%F)
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add docs
-          git commit -m "daily update $(date -u +%F)" || echo 'nothing to commit'
+          git add docs backups
+          git commit -m "daily update ${DATE}" || echo 'nothing to commit'
           git fetch origin main
           git merge -X ours --no-edit origin/main || echo 'merge skipped'
           git push
+          git tag -f "data-${DATE}" >/dev/null 2>&1 || true
+          git push -f origin "data-${DATE}" >/dev/null 2>&1 || true
+          echo 'pushed with backup tag data-'${DATE}
