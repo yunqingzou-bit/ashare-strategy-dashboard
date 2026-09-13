@@ -30,14 +30,13 @@ dates = sorted({p['date'] for p in picks})
 rng = R['window'][0] + ' ~ ' + R['window'][1]
 OPT = '<option value="">全部</option>'
 def sel(k, opts):
-    o = OPT + ''.join('<option value="' + v + '">' + t + '</option>' for v, t in opts)
-    return '<select class="flt" data-k="' + k + '">' + o + '</select>'
+    return '<select class="flt" data-k="' + k + '">' + OPT + ''.join('<option value="' + v + '">' + t + '</option>' for v, t in opts) + '</select>'
 UP = [('up', '上涨'), ('down', '下跌'), ('zt', '涨停≥9.5%'), ('dt', '跌停≤-9.5%'), ('na', '未满')]
 CU = [('up', '上涨'), ('down', '下跌'), ('gt10', '>10%'), ('lt1', '<-10%'), ('na', '未满')]
+PC = [('zt', '涨停≥9.5%'), ('ge5', '≥5%'), ('b05', '0~5%'), ('down', '下跌')]
 EV = [('has', '有事件'), ('none', '无事件'), ('龙虎榜', '龙虎榜'), ('公告', '公告'), ('涨停', '涨停'), ('跌停', '跌停'), ('异动', '异动')]
 WR = [('c100', '100%'), ('ge80', '≥80%'), ('ge60', '≥60%'), ('le40', '≤40%'), ('c0', '0%'), ('na', '未满')]
 CL = [(k, v) for k, v in CN.items()]
-# ---- 主表 ----
 main_rows = []
 for p in picks:
     ps = list(p['paths'])
@@ -57,11 +56,13 @@ for p in picks:
         wr = '-'; wrcls = ''
     evtxt = ' ; '.join(p['events'])
     ev = esc(evtxt) if evtxt else '-'
+    dpct = p['pct']
     stock = '<b>' + p['code'] + '</b> ' + esc(p['name']) + ' <span class="tag">' + CN.get(p['cls'], p['cls']) + '</span>'
     main_rows.append('<tr data-date="' + p['date'][5:] + '" data-stock="' + q(p['code'] + ' ' + str(p['name'])) + '" data-cls="' + p['cls']
-                     + '" data-cum="' + (format(float(p['cum']), '.4f') if p['cum'] is not None else '') + '" data-ev="' + q(flags(p))
-                     + '" data-wr="' + (format(wrp, '.4f') if tot else '') + '"' + attrs + '>'
-                     + '<td>' + p['date'][5:] + '</td><td class="stk">' + stock + '</td>' + cells
+                     + '" data-pct="' + format(float(dpct), '.4f') + '" data-cum="' + (format(float(p['cum']), '.4f') if p['cum'] is not None else '')
+                     + '" data-ev="' + q(flags(p)) + '" data-wr="' + (format(wrp, '.4f') if tot else '') + '"' + attrs + '>'
+                     + '<td>' + p['date'][5:] + '</td><td class="stk">' + stock + '</td><td class="n ' + pc(dpct) + '">' + pct(dpct) + '</td>'
+                     + cells
                      + '<td class="n ' + pc(p['cum']) + '">' + (pct(p['cum']) if p['cum'] is not None else '未满') + '</td>'
                      + '<td class="ev">' + ev + '</td><td class="n' + wrcls + '">' + wr + '</td></tr>')
 stocks = sorted({p['code'] + ' ' + str(p['name']) for p in picks})
@@ -69,11 +70,11 @@ dl = '<datalist id="stklist">' + ''.join('<option value="' + q(s) + '"></option>
 h_main = ('<tr>'
           + '<th>日期' + sel('date', [(d, d) for d in dates]) + '</th>'
           + '<th>股票<input class="flt" data-k="stock" list="stklist" placeholder="输入或选择">' + sel('cls', CL) + '</th>'
+          + '<th>当日涨幅' + sel('pct', PC) + '</th>'
           + '<th>D+1涨幅' + sel('d1', UP) + '</th><th>D+2涨幅' + sel('d2', UP) + '</th><th>D+3涨幅' + sel('d3', UP) + '</th>'
           + '<th>D+4涨幅' + sel('d4', UP) + '</th><th>D+5涨幅' + sel('d5', UP) + '</th>'
           + '<th>5日累计' + sel('cum', CU) + '</th><th>大事件' + sel('ev', EV) + '</th><th>胜率' + sel('wr', WR) + '</th>'
           + '</tr>')
-# ---- 每日组合汇总 ----
 day_rows = []
 for d in dates:
     rs = [p for p in picks if p['date'] == d]
@@ -85,7 +86,6 @@ for d in dates:
     codes = ' / '.join(p['code'] + ' ' + str(p['name']) for p in rs)
     day_rows.append('<tr><td>' + d + '</td><td class="stk">' + codes + '</td><td class="n ' + pc(v1) + '">' + pct(v1)
                     + '</td><td class="n ' + pc(v5) + '">' + pct(v5) + '</td><td class="n">' + (str(w5) + '%' if w5 is not None else '-') + '</td></tr>')
-# ---- 事件专表 ----
 ev_rows = []
 for p in sorted([x for x in picks if x['events']], key=lambda x: x['date']):
     cells = ''.join('<span class="' + pc(v) + '">' + pct(v, '-') + '</span> ' for v in p['paths'])
@@ -93,7 +93,6 @@ for p in sorted([x for x in picks if x['events']], key=lambda x: x['date']):
                    + esc(p['name']) + '</td><td class="ev">' + esc(' ; '.join(p['events'])) + '</td><td>' + cells + '</td><td class="n '
                    + pc(p['cum']) + '">' + pct(p['cum']) + '</td></tr>')
 h_ev = ('<tr><th>日期' + sel('date', [(d, d) for d in dates]) + '</th><th>股票</th><th>大事件' + sel('ev', EV) + '</th><th>D+1..D+5</th><th>5日累计</th></tr>')
-# ---- 统计 ----
 order = ['all', 'zt_first', 'zt_multi', 'breakout', 'trend', 'other', '2026-07', '2026-08', '2026-09']
 t41 = []
 for k in order:
@@ -122,7 +121,7 @@ t43 = ['<tr><td>有效样本天数</td><td class="n">' + str(len(pf)) + ' 个交
 s = stats['all']
 css = '''*{box-sizing:border-box}
 body{margin:0;background:#f4f6fa;color:#0f172a;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-text-size-adjust:100%}
-.wrap{max-width:1560px;margin:0 auto;padding:14px 12px 60px}
+.wrap{max-width:1600px;margin:0 auto;padding:14px 12px 60px}
 h1{font-size:19px;margin:0 0 4px}
 .meta{color:#64748b;font-size:12px;margin-bottom:10px}
 .nav a{display:inline-block;font-size:12px;color:#1d4ed8;text-decoration:none;border:1px solid #93c5fd;background:#eff6ff;padding:4px 10px;border-radius:8px;margin:0 6px 6px 0}
@@ -151,18 +150,16 @@ js = '''(function(){
   function setup(tbl){
     var rows=[].slice.call(tbl.querySelectorAll('tbody tr'));
     var ctrls=[].slice.call(tbl.querySelectorAll('.flt'));
-    function val(el){return (el.value||'').trim();}
     function apply(){
       var n=0;
       for(var i=0;i<rows.length;i++){
         var r=rows[i], ok=true;
         for(var j=0;j<ctrls.length;j++){
-          var c=ctrls[j], k=c.getAttribute('data-k'), v=val(c);
+          var c=ctrls[j], k=c.getAttribute('data-k'), v=(c.value||'').trim();
           if(!v) continue;
           var d=r.getAttribute('data-'+k)||'';
           if(k==='stock'){ if(d.toLowerCase().indexOf(v.toLowerCase())<0) ok=false; }
-          else if(k==='cls'){ if(d!==v) ok=false; }
-          else if(k==='date'){ if(d!==v) ok=false; }
+          else if(k==='cls'||k==='date'){ if(d!==v) ok=false; }
           else if(k==='ev'){
             if(v==='has'){ if(d==='') ok=false; }
             else if(v==='none'){ if(d!=='') ok=false; }
@@ -185,6 +182,8 @@ js = '''(function(){
             else if(v==='dt'){ if(!(x<=-9.5)) ok=false; }
             else if(v==='gt10'){ if(!(x>10)) ok=false; }
             else if(v==='lt1'){ if(!(x<-10)) ok=false; }
+            else if(v==='ge5'){ if(!(x>=5)) ok=false; }
+            else if(v==='b05'){ if(!(x>=0&&x<5)) ok=false; }
             else if(v==='na'){ if(d!=='') ok=false; }
           }
           if(!ok) break;
@@ -210,7 +209,7 @@ H.append('<style>' + css + '</style></head><body><div class="wrap">')
 H.append('<h1>表格版 · A股选股策略回测结果</h1>')
 H.append('<div class="meta">' + rng + ' · 全市场5562只 · ' + str(len(picks)) + ' 只标的 · ' + str(len(dates)) + ' 个交易日 · 表头下拉筛选可直接用（无 JS 时显示全部）</div>')
 H.append('<div class="nav"><a href="index.html">← 返回看板</a><a href="#m1">主表</a><a href="#m2">每日组合汇总</a><a href="#m3">事件专表</a><a href="#m4">统计评估</a></div>')
-H.append('<h2 id="m1">主表 · 每只入选股票单独一行<span>胜率＝5个交易日中的上涨天数占比；表头下拉筛选</span></h2>')
+H.append('<h2 id="m1">主表 · 每只入选股票单独一行<span>胜率＝5个交易日中的上涨天数占比；「当日涨幅」＝选股当天涨幅</span></h2>')
 H.append('<div class="bar"><button id="rst1">重置全部筛选</button><span id="cnt1">命中 ' + str(len(picks)) + ' / ' + str(len(picks)) + ' 行</span></div>')
 H.append('<div class="scroll"><table data-filters="1" data-cnt="cnt1" data-reset="rst1"><thead>' + h_main + '</thead><tbody>' + ''.join(main_rows) + '</tbody></table></div>' + dl)
 H.append('<h2 id="m2">每日组合汇总<span>' + str(len(day_rows)) + ' 个交易日</span></h2>')
@@ -230,8 +229,8 @@ H.append('1. 这是“1日爆破力”策略：次日上涨率 ' + n1(s['p_d1_up
 H.append('2. 只有连板股能拿5天：连板组5日胜率 ' + n1(stats['zt_multi']['p5_up']*100) + '%、5日平均 ' + pct(stats['zt_multi']['m5']) + '；首板组 ' + n1(stats['zt_first']['p5_up']*100) + '% / ' + pct(stats['zt_first']['m5']) + '。<br>')
 H.append('3. 放量突破类几乎无效（样本 ' + str(stats['breakout']['n']) + ' 只，次日胜率 ' + n1(stats['breakout']['p_d1_up']*100) + '%）。<br>')
 H.append('4. 尾部风险：' + format(sum(1 for x in cum if x <= -5)/len(cum)*100, '.0f') + '% 的标的5日累计亏5%以上，最差 ' + pct(min(cum)) + '，最好 ' + pct(max(cum)) + '。</div>')
-H.append('<footer>口径：①收益为“选股日收盘 → D+k收盘”的前复权持有收益，未扣手续费/印花税/滑点，未处理“次日一字板买不进”；②<b>胜率＝该股持仓5个交易日中的上涨天数占比</b>（例 4/5 = 80%），不足5日显示“未满”；③板块分项用新浪行业成分股涨跌中位数替代同花顺行业+资金流，板质量分项用价格推导替代封单/首封时间；④全市场基准为同期全部个股（样本 ' + str(base['n5']) + '）等权统计；⑤历史统计，不构成投资建议。</footer>')
+H.append('<footer>口径：①收益为“选股日收盘 → D+k收盘”的前复权持有收益，未扣手续费/印花税/滑点，未处理“次日一字板买不进”；②<b>胜率＝该股持仓5个交易日中的上涨天数占比</b>（例 4/5 = 80%）；<b>当日涨幅＝该股在选股当天的涨跌幅</b>；③板块分项用新浪行业成分股涨跌中位数替代同花顺行业+资金流，板质量分项用价格推导替代封单/首封时间；④全市场基准为同期全部个股（样本 ' + str(base['n5']) + '）等权统计；⑤历史统计，不构成投资建议。</footer>')
 H.append('</div><script>' + js + '</script></body></html>')
 os.makedirs('docs', exist_ok=True)
 open('docs/tables.html', 'w', encoding='utf-8', newline=chr(10)).write(chr(10).join(H))
-print('docs/tables.html', os.path.getsize('docs/tables.html'), '| 主表', len(main_rows), '| 每日', len(day_rows), '| 事件', len(ev_rows), '| 下拉控件', h_main.count('class="flt"') + h_ev.count('class="flt"'))
+print('docs/tables.html', os.path.getsize('docs/tables.html'), '| 主表', len(main_rows), '| 每日', len(day_rows), '| 事件', len(ev_rows), '| 控件', h_main.count('class="flt"') + h_ev.count('class="flt"'))
