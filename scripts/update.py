@@ -21,6 +21,9 @@ def main():
         print('=== ' + s + ' ===', flush=True)
         r = subprocess.run(cmd, cwd=ROOT, env=env)
         if r.returncode != 0:
+            if s == 'snapshot.py':
+                print('  snapshot failed; continuing without intraday snapshot', flush=True)
+                continue
             print('STEP FAILED: ' + s, flush=True)
             return 1
         print('  done %.0fs' % (time.time() - t0), flush=True)
