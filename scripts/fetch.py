@@ -12,15 +12,19 @@ S.trust_env = False
 S.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36',
                   'Referer': 'https://stockpage.10jqka.com.cn/'})
 def log(*a): print(*a, flush=True)
-def in_session_cn(stamp):
+def in_session_cn(stamp, date_cn=None):
     try:
         t = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S')
     except (TypeError, ValueError):
         return False
     if t.weekday() >= 5:
         return False
+    if date_cn:
+        now_cn = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).replace(tzinfo=None)
+        if t.date().isoformat() != date_cn or t.date() != now_cn.date():
+            return False
     hm = t.hour * 60 + t.minute
-    return (550 <= hm <= 695) or (770 <= hm <= 920)
+    return (550 <= hm <= 700) or (760 <= hm <= 940)
 def day_is_final(fetched_at, d):
     if not fetched_at:
         return True
@@ -39,7 +43,7 @@ def apply_snapshot(bars):
         snap = json.load(open(SNAPSHOT, encoding='utf-8'))
     except Exception as e:
         return {'applied': False, 'reason': 'snapshot_unreadable ' + type(e).__name__}
-    if not in_session_cn(snap.get('retrieved_at_cn', '')):
+    if not in_session_cn(snap.get('retrieved_at_cn', ''), snap.get('date_cn')):
         return {'applied': False, 'reason': 'outside_session', 'snapshot_at': snap.get('retrieved_at_cn'),
                 'source': snap.get('source')}
     date_cn = snap.get('date_cn'); injected = 0; matched = 0; rejected = 0
