@@ -27,7 +27,7 @@ function sortBy(){
   var tb2=document.getElementById('db');
   var rows=[].slice.call(tb2.querySelectorAll('tr'));
   rows.sort(function(a,b){
-    if(key=='d')return a.getAttribute('data-d')<b.getAttribute('data-d')?-1:1;
+    if(key=='d')return a.getAttribute('data-d')>b.getAttribute('data-d')?-1:1;
     var x=parseFloat(a.getAttribute(key=='cum'?'data-cum':'data-d1'));
     var y=parseFloat(b.getAttribute(key=='cum'?'data-cum':'data-d1'));
     return y-x;

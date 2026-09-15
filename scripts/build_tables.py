@@ -38,7 +38,7 @@ EV = [('has', '有事件'), ('none', '无事件'), ('龙虎榜', '龙虎榜'), (
 WR = [('c100', '100%'), ('ge80', '≥80%'), ('ge60', '≥60%'), ('le40', '≤40%'), ('c0', '0%'), ('na', '未满')]
 CL = [(k, v) for k, v in CN.items()]
 main_rows = []
-for p in picks:
+for p in reversed(picks):
     ps = list(p['paths'])
     cells = ''
     attrs = ''
@@ -76,7 +76,7 @@ h_main = ('<tr>'
           + '<th>5日累计' + sel('cum', CU) + '</th><th>大事件' + sel('ev', EV) + '</th><th>胜率' + sel('wr', WR) + '</th>'
           + '</tr>')
 day_rows = []
-for d in dates:
+for d in reversed(dates):
     rs = [p for p in picks if p['date'] == d]
     d1 = [p['paths'][0] for p in rs if p['paths']]
     m5 = [p['cum'] for p in rs if p['cum'] is not None]

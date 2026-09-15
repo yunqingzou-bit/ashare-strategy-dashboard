@@ -18,7 +18,7 @@ def esc(s):
 def tag(k): return '<span class="tag t-' + k + '">' + CN.get(k, k) + '</span>'
 dates = sorted({p['date'] for p in picks})
 dayrows = []
-for d in dates:
+for d in reversed(dates):
     rs = [p for p in picks if p['date'] == d]
     d1 = [p['paths'][0] for p in rs if p['paths']]
     m5 = [p['cum'] for p in rs if p['cum'] is not None]
@@ -44,7 +44,7 @@ for lab, v in vals:
         col = 'var(--up)' if v >= 0 else 'var(--dn)'
         bars.append('<div class="bar" style="height:' + str(h) + 'px;background:' + col + '" title="' + lab + ' 组合5日均值 ' + pct(v) + '"></div>')
 det = []
-for p in picks:
+for p in reversed(picks):
     ps = list(p['paths']) + [None]*(5-len(p['paths']))
     tds = '<td data-l="日期">' + p['date'][5:] + '</td><td data-l="代码">' + p['code'] + '</td><td data-l="名称">' + esc(p['name']) + '</td>' + '<td data-l="当日涨幅" class="num ' + pc(p['pct']) + '">' + pct(p['pct']) + '</td>'
     tds += '<td data-l="评分" class="num">' + format(p['score'], '.1f') + '</td><td data-l="形态">' + CN.get(p['cls'], p['cls']) + '</td>'
@@ -160,7 +160,7 @@ import re as _re
 _p = 'docs/index.html'
 _t = open(_p, encoding='utf-8').read()
 _rows = []
-for _d in dates:
+for _d in reversed(dates):
     _rs = [x for x in picks if x['date'] == _d]
     _d1 = [x['paths'][0] for x in _rs if x['paths']]
     _m5 = [x['cum'] for x in _rs if x['cum'] is not None]
