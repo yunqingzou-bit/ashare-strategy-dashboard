@@ -13,3 +13,4 @@ data/tables.md
 local-tools/
 data/garp-cache/
 data/garp-acquisition.json
+data/snapshot.json

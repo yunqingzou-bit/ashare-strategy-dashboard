@@ -59,10 +59,13 @@ def needs_cashflow(packet, start):
             return True
     return False
 
-def fetch_price(code, refresh=False):
+def fetch_price(code, refresh=False, want=None):
     path=CACHE/'prices'/(code+'.json')
-    if path.exists() and (not refresh or time.time()-path.stat().st_mtime<86400):
-        return json.loads(path.read_text(encoding='utf-8'))
+    if path.exists():
+        cached=json.loads(path.read_text(encoding='utf-8'))
+        last=max(cached.get('prices') or {'':''})
+        if not refresh or (want and last>=want):
+            return cached
     url='https://d.10jqka.com.cn/v6/line/hs_'+code+'/00/last.js'
     for attempt in range(3):
         try:
@@ -79,10 +82,10 @@ def fetch_price(code, refresh=False):
             error=type(e).__name__+': '+str(e)[:100];time.sleep(.3*(attempt+1))
     return {'code':code,'error':error}
 
-def prices(codes, refresh, workers):
+def prices(codes, refresh, workers, want=None):
     failures=[]
     with cf.ThreadPoolExecutor(max_workers=workers) as pool:
-        for i,p in enumerate(pool.map(lambda c:fetch_price(c,refresh),codes)):
+        for i,p in enumerate(pool.map(lambda c:fetch_price(c,refresh,want),codes)):
             if 'error' in p: failures.append(p)
             if (i+1)%250==0: print('raw prices',i+1,'/',len(codes),flush=True)
     return {'attempted':len(codes),'resolved':len(codes)-len(failures),'failed':failures}
@@ -92,7 +95,9 @@ def main():
     args=ap.parse_args()
     if args.prices_only:
         audit=json.loads((ROOT/'data/garp-acquisition.json').read_text(encoding='utf-8'))
-        audit['sources']['raw_prices']=prices(audit['candidate_codes'],args.refresh,args.workers)
+        bars=json.loads((ROOT/'data/bars.json').read_text(encoding='utf-8'))
+        want=max(v[-1][0] for v in bars['bars'].values())
+        audit['sources']['raw_prices']=prices(audit['candidate_codes'],args.refresh,args.workers,want)
         save(ROOT/'data/garp-acquisition.json',audit);return
     b=json.loads((ROOT/'data/bars.json').read_text(encoding='utf-8'))
     codes=sorted(b['bars']);end=max(v[-1][0] for v in b['bars'].values());start=str(int(end[:4])-1)+end[4:]

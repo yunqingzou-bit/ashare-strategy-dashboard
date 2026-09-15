@@ -76,6 +76,25 @@ def zt_count(c, i):
         n += 1; k -= 1
         if n > 12: break
     return n
+LEDGER_PATH = 'docs/pick-ledger.json'
+def load_ledger():
+    if os.path.exists(LEDGER_PATH):
+        try:
+            return json.load(open(LEDGER_PATH, encoding='utf-8'))
+        except Exception:
+            return {}
+    return {}
+LEDGER = load_ledger(); ledger_missing = 0
+def rebuild(c, D):
+    p = SB.get(c, {}).get(D)
+    if p is None or p < 60 or c not in bars:
+        return None
+    m = metrics(c, p)
+    if not m:
+        return None
+    return {'code': c, 'name': names.get(c), 'score': 0.0, 'cls': 'other', 'lb': 0,
+            'close': m['close'], 'pct': m['pct'], 'board': s2b.get(c), 'vr': m['vr5'], 'to': m['to'],
+            'cap': m['float_cap'], 'rsi': m['rsi14'], 'ret20': m['ret20'], 'sub': [0, 0, 0, 0, 0, 0]}
 picks = []; rets = {k: [] for k in range(1,6)}; sector_cache = {}
 def board_pct(D):
     if D in sector_cache: return sector_cache[D]
@@ -145,7 +164,20 @@ for D in WINDOW:
                        'cap': m['float_cap'], 'rsi': m['rsi14'], 'ret20': m['ret20'],
                        'sub': [round(s_sec,1), round(s_t,1), round(s_v,1), round(s_q,1), round(s_m,1), round(s_r,1)]})
     scored.sort(key=lambda x: -x['score'])
-    for t in scored[:5]:
+    bycode = {t['code']: t for t in scored}
+    frozen = LEDGER.get(D)
+    if frozen:
+        chosen = []
+        for c in frozen:
+            t = bycode.get(c)
+            if t is None:
+                t = rebuild(c, D); ledger_missing += 1
+            if t is not None:
+                chosen.append(t)
+    else:
+        chosen = scored[:5]
+        LEDGER[D] = [t['code'] for t in chosen]
+    for t in chosen:
         c = t['code']; v = bars[c]; p = t['p']
         row = dict(t); row.pop('p', None); row['date'] = D
         row['paths'] = []; row['n5'] = 0; row['cum'] = None
@@ -159,6 +191,8 @@ for D in WINDOW:
         v = bars[c]
         for k in range(1, 6):
             if p+k < len(v): rets[k].append((v[p+k][2]/v[p+k-1][2]-1)*100)
+json.dump(LEDGER, open(LEDGER_PATH, 'w', encoding='utf-8'), ensure_ascii=False, indent=1, sort_keys=True)
+print('ledger days', len(LEDGER), 'frozen_missing', ledger_missing)
 def agg(rows):
     d1 = [r['paths'][0] for r in rows if r['paths']]
     c5 = [r['cum'] for r in rows if r['cum'] is not None]
@@ -177,7 +211,8 @@ for mo in ('2026-07','2026-08','2026-09'):
 bm = [x for k in (1,2,3,4,5) for x in rets[k]]
 base = {'n': len(bm), 'mean_daily': mean(bm), 'p_up_daily': sum(1 for x in bm if x > 0)/len(bm)}
 json.dump({'window': [WINDOW[0], WINDOW[-1]], 'n_days': len(WINDOW), 'picks': picks,
-           'stats': stats, 'baseline': base}, open('data/result.json','w',encoding='utf-8'),
+           'stats': stats, 'baseline': base, 'provisional': B.get('provisional')},
+          open('data/result.json','w',encoding='utf-8'),
           ensure_ascii=False, indent=1)
 print('picks', len(picks), 'days', len(WINDOW))
 print('STATS', json.dumps(stats, ensure_ascii=False, default=str))

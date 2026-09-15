@@ -3,7 +3,7 @@
 import argparse, os, subprocess, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-STEPS = ['fetch.py', 'replay.py', 'report.py', 'build_site.py', 'build_tables.py']
+STEPS = ['snapshot.py', 'fetch.py', 'replay.py', 'report.py', 'build_site.py', 'build_tables.py']
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=45)
@@ -13,7 +13,7 @@ def main():
     env['WINDOW_DAYS'] = str(a.days)
     t0 = time.time()
     for i, s in enumerate(STEPS):
-        if a.skip_fetch and s == 'fetch.py': continue
+        if a.skip_fetch and s in ('snapshot.py', 'fetch.py'): continue
         if s == 'fetch.py':
             cmd = [sys.executable, os.path.join(HERE, s), '--days', str(a.days)]
         else:

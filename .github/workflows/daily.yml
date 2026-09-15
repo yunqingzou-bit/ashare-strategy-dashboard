@@ -1,7 +1,7 @@
 name: daily-update
 on:
   schedule:
-    - cron: '30 10 * * 1-5'
+    - cron: '20 6 * * 1-5'
   workflow_dispatch:
 permissions:
   contents: write

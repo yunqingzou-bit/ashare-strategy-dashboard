@@ -11,7 +11,7 @@ SOURCES={
 
 def get_page(source,period,page,refresh):
     path=CACHE/'em-pages'/source/(period+'-'+str(page)+'.json')
-    if path.exists() and (not refresh or time.time()-path.stat().st_mtime<86400):
+    if path.exists() and not refresh:
         return json.loads(path.read_text(encoding='utf-8'))
     name,mapping=SOURCES[source]
     columns=','.join(['SECURITY_CODE','REPORT_DATE','NOTICE_DATE',*mapping])
@@ -60,7 +60,7 @@ def main():
         audit['sources'][source]={'attempted':len(b['bars']),'resolved':len(companies),'failed':[{'code':c,'reason':'No vendor financial rows in requested periods'} for c in b['bars'] if c not in companies]}
         if source=='gjzb':audit['candidate_codes']=sorted(c for c,p in companies.items() if needs_cashflow(p,end))
         save(ROOT/'data/garp-acquisition.json',audit)
-    audit['sources']['raw_prices']=prices(audit['candidate_codes'],a.refresh,4)
+    audit['sources']['raw_prices']=prices(audit['candidate_codes'],a.refresh,4,end)
     audit['finished_at']=dt.datetime.now(dt.timezone.utc).isoformat();save(ROOT/'data/garp-acquisition.json',audit)
     print('acquisition complete',len(audit['candidate_codes']),'candidate packets',flush=True)
 

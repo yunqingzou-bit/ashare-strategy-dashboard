@@ -1,16 +1,69 @@
 # -*- coding: utf-8 -*-
 '''Fetch all-market qfq bars (THS) + per-day pools/LHB/notices (Eastmoney, cached).'''
-import argparse, json, os, sys, time
+import argparse, datetime, json, os, sys, time
 import requests
 from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 CACHE = os.path.join(DATA, 'events')
+SNAPSHOT = os.path.join(DATA, 'snapshot.json')
 S = requests.Session()
 S.trust_env = False
 S.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36',
                   'Referer': 'https://stockpage.10jqka.com.cn/'})
 def log(*a): print(*a, flush=True)
+def in_session_cn(stamp):
+    try:
+        t = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S')
+    except (TypeError, ValueError):
+        return False
+    if t.weekday() >= 5:
+        return False
+    hm = t.hour * 60 + t.minute
+    return (550 <= hm <= 695) or (770 <= hm <= 920)
+def day_is_final(fetched_at, d):
+    if not fetched_at:
+        return True
+    try:
+        stamp = datetime.datetime.fromisoformat(fetched_at)
+    except ValueError:
+        return True
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=datetime.timezone.utc)
+    close = datetime.datetime.strptime(d, '%Y-%m-%d').replace(hour=7, minute=10, tzinfo=datetime.timezone.utc)
+    return stamp >= close
+def apply_snapshot(bars):
+    if not os.path.exists(SNAPSHOT):
+        return {'applied': False, 'reason': 'no_snapshot'}
+    try:
+        snap = json.load(open(SNAPSHOT, encoding='utf-8'))
+    except Exception as e:
+        return {'applied': False, 'reason': 'snapshot_unreadable ' + type(e).__name__}
+    if not in_session_cn(snap.get('retrieved_at_cn', '')):
+        return {'applied': False, 'reason': 'outside_session', 'snapshot_at': snap.get('retrieved_at_cn'),
+                'source': snap.get('source')}
+    date_cn = snap.get('date_cn'); injected = 0; matched = 0; rejected = 0
+    for code, s in (snap.get('rows') or {}).items():
+        v = bars.get(code); price = s.get('price')
+        if not v or not price:
+            continue
+        matched += 1
+        o = s.get('open') or price; h = s.get('high') or price; l = s.get('low') or price
+        if not (l <= price <= h):
+            rejected += 1
+            continue
+        if v[-1][0] > date_cn:
+            continue
+        bar = [date_cn, o, price, h, l, s.get('volume_shares') or 0, s.get('amount') or 0, s.get('turnover')]
+        if v[-1][0] == date_cn:
+            v[-1] = bar
+        else:
+            v.append(bar)
+        injected += 1
+    return {'applied': bool(injected), 'date': date_cn if injected else None, 'injected': injected,
+            'matched': matched, 'rejected': rejected, 'universe': len(bars),
+            'snapshot_at': snap.get('retrieved_at_cn'), 'source': snap.get('source'),
+            'quote_time': snap.get('quote_time')}
 def ths_line(code):
     for fq in ('01', '00'):
         url = 'https://d.10jqka.com.cn/v6/line/hs_' + code + '/' + fq + '/last.js'
@@ -79,12 +132,17 @@ def refresh_bars():
     json.dump({'names': names, 'bars': bars, 'failed': fail},
               open(os.path.join(DATA, 'bars.json'), 'w', encoding='utf-8'), ensure_ascii=False)
     log('bars ok', len(bars), 'fail', len(fail))
-    return bars
+    return names, bars
 def fetch_day(ak, d):
     ds = d.replace('-', '')
     p = os.path.join(CACHE, ds + '.json')
     if os.path.exists(p):
-        return False
+        try:
+            cached = json.load(open(p, encoding='utf-8'))
+        except Exception:
+            cached = {}
+        if day_is_final(cached.get('fetched_at'), d):
+            return False
     def rows(fn, **kw):
         try:
             df = fn(**kw); df.columns = [str(c) for c in df.columns]
@@ -97,6 +155,7 @@ def fetch_day(ak, d):
          'strong': rows(ak.stock_zt_pool_strong_em, date=ds),
          'lhb': rows(ak.stock_lhb_detail_em, start_date=ds, end_date=ds),
          'notices': rows(ak.stock_notice_report, symbol='全部', date=ds)}
+    o['fetched_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     json.dump(o, open(p, 'w', encoding='utf-8'), ensure_ascii=False)
     return True
 def main():
@@ -107,9 +166,14 @@ def main():
     a = ap.parse_args()
     os.makedirs(CACHE, exist_ok=True)
     if a.skip_bars:
-        bars = json.load(open(os.path.join(DATA, 'bars.json'), encoding='utf-8'))['bars']
+        loaded = json.load(open(os.path.join(DATA, 'bars.json'), encoding='utf-8'))
+        names = loaded['names']; bars = loaded['bars']
     else:
-        bars = refresh_bars()
+        names, bars = refresh_bars()
+    prov = apply_snapshot(bars)
+    log('snapshot', json.dumps(prov, ensure_ascii=False, default=str))
+    json.dump({'names': names, 'bars': bars, 'provisional': prov},
+              open(os.path.join(DATA, 'bars.json'), 'w', encoding='utf-8'), ensure_ascii=False)
     cal = sorted({r[0] for v in bars.values() for r in v})
     win = cal[-a.days:] if len(cal) > a.days else cal[:]
     log('window', win[0], '->', win[-1], len(win), 'days')

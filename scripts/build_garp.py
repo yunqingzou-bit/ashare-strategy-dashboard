@@ -13,6 +13,9 @@ RULES=[
  ('现金流初筛','标准FCF＝经营活动现金净额−购建长期资产现金支出；TTM＝上年全年＋本年累计−上年同期；FCF收益率≥3%。未扣SBC。'),
  ('质量初筛','最近已公布年度的供应商ROIC≥8%；最新资产负债率≤60%。资产负债率不是净债务/EBITDA，未据此宣称通过原Skill杠杆门。'),
  ('历史时点','使用供应商公告日期，并从公告后交易日启用；最新修订版财报、报表间股本变化、历史ST/退市名单仍可能引入偏差，不是严格点时数据库回测。'),
+ ('更新时点','每个交易日北京时间14:20运行，用全市场实时快照生成当日盘中数据，供尾盘买入参考。当日行标记为盘中快照，未收盘，次日不会改写已发布的入选记录。'),
+ ('盘中快照口径','当日价格与成交数据来自实时快照源，与历史序列源不同；实测两源在历史收盘上完全一致，当日价格存在约1%的中位差异。T+1以快照价为基准，T+2至T+5为收盘对收盘，五日累计仍等于逐日复合。'),
+ ('记录不可改写','已发布的入选记录按日期与代码冻结：后续运行只更新其T+1至T+5结果，不改变入选名单、入场价与当日涨幅，因此历史胜率可复核。'),
  ('未完成的原Skill验证','缺少历史一致预期、独立2–3年预测、SBC调整、摊薄股本CAGR、净债务/EBITDA及逐家公司一手核验。所有适配候选均为review_required；严格版已核验入选数为0，不等于市场没有合格股票。'),
  ('形态标签','按入选日量价结构标注：放量突破（收盘创20日新高且量能≥前20日均量1.5倍）、趋势多头（5>10>20>60日均线且价在均线上）、重回20日线（收盘上穿20日均线）、均线上方、整理/回撤。仅描述结构，用于解释选股背景。'),
  ('涨幅口径','T+n为筛选日后第n个市场交易日相对前收盘的前复权涨幅；5日累计＝T+5收盘/筛选日收盘−1；停牌缺值不顺延，未完成或缺值不参与五日统计。'),
@@ -76,14 +79,16 @@ def shape(bars,i):
     if price>ma(20) and bars[i-1][2]<=statistics.mean(r[2] for r in bars[i-20:i]):return '重回20日线'
     return '均线上方' if price>ma(20) else '整理/回撤'
 
-def returns(bars,index,cal,date):
+def returns(bars,index,cal,date,entry=None):
     lookup={r[0]:i for i,r in enumerate(bars)};k=cal.index(date);out=[];future=[]
+    base0=entry if entry else bars[index][2]
     for n in range(1,6):
         d=cal[k+n] if k+n<len(cal) else None;future.append(d)
         pos=lookup.get(d)
-        out.append((bars[pos][2]/bars[pos-1][2]-1)*100 if pos is not None and pos>0 and bars[pos-1][2]>0 else None)
+        if pos is None or pos<1 or bars[pos-1][2]<=0:out.append(None)
+        else:out.append((bars[pos][2]/(base0 if n==1 else bars[pos-1][2])-1)*100)
     complete=all(finite(v) for v in out)
-    cum=(bars[lookup[future[4]]][2]/bars[index][2]-1)*100 if complete else None
+    cum=(bars[lookup[future[4]]][2]/base0-1)*100 if complete and base0>0 else None
     return out,cum,sum(v>0 for v in out)*20 if complete else None,future
 
 def run():
@@ -91,13 +96,23 @@ def run():
     prices_audit=audit.get('sources',{}).get('raw_prices',{})
     if not audit.get('finished_at') or prices_audit.get('resolved',0)<0.9*max(1,prices_audit.get('attempted',1)):
         raise SystemExit('Acquisition incomplete; keeping the previously published page.')
+    prov=b.get('provisional') or {}
+    prev_payload={}
+    prev_path=ROOT/'docs/garp.json'
+    if prev_path.exists():
+        try:prev_payload=load(prev_path)
+        except Exception:prev_payload={}
+    previous={(r.get('date'),r.get('code')):r for r in (prev_payload.get('rows') or []) if r.get('date') and r.get('code')}
     cal=sorted({r[0] for rows in b['bars'].values() for r in rows})
     end=dt.date.fromisoformat(cal[-1]);month=end.month-3;year=end.year
     if month<1:month+=12;year-=1
     start=dt.date(year,month,min(end.day,calendar.monthrange(year,month)[1]))+dt.timedelta(days=1)
     window=[d for d in cal if start.isoformat()<=d<=end.isoformat()]
+    scan_start=cal[max(0,cal.index(window[0])-5)] if window else None
     rows=[];coverage=collections.Counter();source_ledger={};financial_records={}
     for code in audit['candidate_codes']:
+        if code not in b['bars']:
+            coverage['missing_bars']+=1;continue
         name=b['names'].get(code,code)
         if 'ST' in name.upper() or '退' in name:
             coverage['current_st_excluded']+=1;continue
@@ -106,7 +121,7 @@ def run():
         coverage['packets_available']+=1;v=b['bars'][code];memo={};hits=[]
         for i,r in enumerate(v):
             date=r[0]
-            if date not in window or i<59 or r[5]<=0:continue
+            if not (scan_start<=date<=window[-1]) or i<59 or r[5]<=0:continue
             coverage['stock_days_considered']+=1
             key=tuple(max((p for p,z in reports(packet).items() if published(z,date)),default='') for packet in (gj,cf,bs))
             if key not in memo:memo[key]=financials(gj,cf,bs,date)
@@ -125,13 +140,36 @@ def run():
             else:signals[-1].append(hit)
         for streak in signals:
             i,date,f,price,cap,amount,pe,fy=streak[0]
-            rr,cum,win,future=returns(v,i,cal,date)
+            if date<window[0]:continue
+            prior=previous.get((date,code)) or {}
+            entry=prior.get('entry_price') or prior.get('raw_close') or price
+            entry_source=prior.get('entry_source') or ('intraday_snapshot' if (prov.get('applied') and prov.get('date')==date) else 'close')
+            rr,cum,win,future=returns(v,i,cal,date,entry)
             ref=code+'-'+f['period']
-            row=dict(date=date,code=code,name=name,shape=shape(v,i),pct=(v[i][2]/v[i-1][2]-1)*100,cum=cum,win=win,status='review_required',future_dates=future,streak_days=len(streak),financial_ref=ref,pe_ttm=pe,fcf_yield=fy,cap_yi=cap/1e8,amount_wan=amount/1e4,raw_close=price,eps_yoy=f['eps_yoy'],revenue_yoy=f['revenue_yoy'],roic=f['roic'],debt_ratio=f['debt_ratio'])
+            row=dict(date=date,code=code,name=prior.get('name') or name,shape=prior.get('shape') or shape(v,i),pct=prior.get('pct',(v[i][2]/v[i-1][2]-1)*100),cum=cum,win=win,status='review_required',future_dates=future,streak_days=prior.get('streak_days') or len(streak),financial_ref=prior.get('financial_ref') or ref,pe_ttm=prior.get('pe_ttm',pe),fcf_yield=prior.get('fcf_yield',fy),cap_yi=prior.get('cap_yi',cap/1e8),amount_wan=prior.get('amount_wan',amount/1e4),raw_close=price,entry_price=entry,entry_source=entry_source,eps_yoy=f['eps_yoy'],revenue_yoy=f['revenue_yoy'],roic=f['roic'],debt_ratio=f['debt_ratio'])
             row.update({f't{n+1}':rr[n] for n in range(5)})
             rows.append(row);financial_records[ref]=f;coverage['entry_signals']+=1
             source_ledger[code]={s:{k:packet[k] for k in ('url','retrieved_at')} for s,packet in zip(('indicators','cashflow','balance','raw_price'),(gj,cf,bs,raw))}
     completed=[r for r in rows if r['cum'] is not None]
+    seen={(r['date'],r['code']) for r in rows}
+    carried=0
+    for (date,code),prior in sorted(previous.items()):
+        if (date,code) in seen:continue
+        v=b['bars'].get(code)
+        if not v or date not in cal or not (window[0]<=date<=window[-1]):continue
+        idx={r[0]:j for j,r in enumerate(v)}.get(date)
+        if not idx:continue
+        rr,cum,win,future=returns(v,idx,cal,date,prior.get('entry_price') or prior.get('raw_close'))
+        row=dict(prior);row.update({f't{n+1}':rr[n] for n in range(5)})
+        row['cum']=cum;row['win']=win;row['future_dates']=future;row['carried_forward']=True
+        rows.append(row);carried+=1
+    for r in rows:
+        ref=r.get('financial_ref')
+        if ref and ref not in financial_records and ref in (prev_payload.get('financial_records') or {}):
+            financial_records[ref]=prev_payload['financial_records'][ref]
+        if r['code'] not in source_ledger and r['code'] in (prev_payload.get('sources') or {}):
+            source_ledger[r['code']]=prev_payload['sources'][r['code']]
+    coverage['carried_forward']=carried
     nonoverlap=[];last={};ci={d:i for i,d in enumerate(cal)}
     for r in sorted(rows,key=lambda r:(r['date'],r['code'])):
         if r['code'] in last and ci[r['date']]<=last[r['code']]+5:continue
@@ -155,7 +193,7 @@ def run():
     checks.append({'check':'全部入选日落在统计区间内','rows':len(rows),'mismatch':len(rows)-len(window_rows)})
     validation={'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'kind':'internal_consistency_only','note':'仅验证本页计算口径自洽，不是与独立行情源的交叉比对；行情与财报均来自同一供应商链路。','checks':checks}
     save(ROOT/'docs/garp-validation.json',validation)
-    payload={'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'runtime':RUNTIME,'status':'adapted_research_only','strict_verified_eligible':0,'start':window[0],'end':window[-1],'trading_days':len(window),'headers':HEADERS,'fields':FIELDS,'rules':RULES,'acquisition':audit,'coverage':dict(coverage),'stats':{'records':len(rows),'stocks':len({r['code'] for r in rows}),'completed':stat(completed),'nonoverlap':stat(nonoverlap)},'per_stock':per_stock,'financial_records':financial_records,'sources':source_ledger,'rows':sorted(rows,key=lambda r:(r['date'],r['code']),reverse=True)}
+    payload={'generated_at':dt.datetime.now(dt.timezone.utc).isoformat(),'runtime':RUNTIME,'status':'adapted_research_only','strict_verified_eligible':0,'start':window[0],'end':window[-1],'trading_days':len(window),'provisional':prov,'frozen_rows':len(previous),'carried_forward':carried,'headers':HEADERS,'fields':FIELDS,'rules':RULES,'acquisition':audit,'coverage':dict(coverage),'stats':{'records':len(rows),'stocks':len({r['code'] for r in rows}),'completed':stat(completed),'nonoverlap':stat(nonoverlap)},'per_stock':per_stock,'financial_records':financial_records,'sources':source_ledger,'rows':sorted(rows,key=lambda r:(r['date'],r['code']),reverse=True)}
     save(ROOT/'docs/garp.json',payload)
     text=io.StringIO(newline='');writer=csv.writer(text);writer.writerow(HEADERS)
     for r in payload['rows']:writer.writerow([cell(r,k) for k in FIELDS])
