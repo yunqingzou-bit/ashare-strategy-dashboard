@@ -120,12 +120,13 @@ H.append('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">')
 H.append('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">')
 H.append('<meta name="theme-color" content="#0f172a"><title>选股策略回测看板 2026-07-13~09-11</title>')
 H.append('<style>' + open('scripts/assets/dash.css', encoding='utf-8').read() + CSSADD + '</style><noscript><style>.sec{display:block!important}.tabs{display:none}</style></noscript></head><body>')
-H.append('<header class="top"><div class="in"><h1>A股选股策略回测看板</h1><a href="garp.html" style="float:right;margin-right:6px;font-size:12px;color:#bbf7d0;text-decoration:none;border:1px solid #4ade80;padding:3px 10px;border-radius:8px">成长价值筛选 →</a><a href="tables.html" style="float:right;font-size:12px;color:#bfdbfe;text-decoration:none;border:1px solid #60a5fa;padding:3px 10px;border-radius:8px">表格版 →</a><div class="sub">' + R['window'][0] + ' ~ ' + R['window'][1]
+H.append('<header class="top"><div class="in"><div class="topline"><h1>A股选股策略回测看板</h1><nav class="topnav"><a class="g" href="garp.html">成长价值筛选 →</a><a href="tables.html">表格版 →</a></nav></div><div class="sub">' + R['window'][0] + ' ~ ' + R['window'][1]
          + ' · 全市场5562只 · 225只标的 · 数据源：同花顺前复权 + 东方财富涨停池/龙虎榜/公告</div></div></header>')
 H.append('<div class="wrap"><div class="kpis">' + kpis + '</div>')
 _pv = (R.get('provisional') or {})
 if _pv.get('applied'):
-    H.append('<div style="background:#fff4d6;border:1px solid #dfc06a;border-left:4px solid #b8860b;border-radius:8px;padding:10px 12px;color:#6b4d0d;margin:10px 0;font-size:13px">14:20 盘中快照（未收盘）· ' + str(_pv.get('date')) + ' · 抓取于 ' + str(_pv.get('snapshot_at')) + ' · 供尾盘买入参考；已发布的选股记录不会因次日收盘数据而改写</div>')
+    _lbl = '当日收盘快照' if _pv.get('capture') == 'after_close' else '14:20 盘中快照（未收盘）'
+    H.append('<div style="background:#fff4d6;border:1px solid #dfc06a;border-left:4px solid #b8860b;border-radius:8px;padding:10px 12px;color:#6b4d0d;margin:10px 0;font-size:13px">' + _lbl + ' · ' + str(_pv.get('date')) + ' · 抓取于 ' + str(_pv.get('snapshot_at')) + ' · 供尾盘买入参考；已发布的选股记录不会因次日收盘数据而改写</div>')
 H.append('<div class="card"><h2>每日选股组合的5日累计收益（等权5只）<span>红=正 绿=负 · 悬停看数值</span></h2><div class="bd"><div class="chart">' + ''.join(bars) + '</div><div class="axis"><span>' + dates[0][5:] + '</span><span>' + dates[len(dates)//2][5:] + '</span><span>' + dates[-1][5:] + '</span></div></div></div>')
 H.append('<div class="tabs" id="tb"><button data-v="s1" class="on">每日选股</button><button data-v="s2">逐日明细</button><button data-v="s3">大事件</button><button data-v="s4">统计评估</button></div>')
 H.append('<section id="s1" class="sec on"><div class="card"><h2>表1 · 每个交易日选出的5只<span>共 ' + str(len(dates)) + ' 个交易日</span></h2><div class="bd"><div class="grid-days">' + ''.join(dayrows) + '</div></div></div></section>')

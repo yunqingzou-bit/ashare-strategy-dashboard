@@ -210,7 +210,8 @@ H.append('<meta name="viewport" content="width=device-width,initial-scale=1"><ti
 H.append('<style>' + css + '</style></head><body><div class="wrap">')
 _pv = (R.get('provisional') or {})
 if _pv.get('applied'):
-    H.append('<div class="meta" style="background:#fff4d6;border:1px solid #dfc06a;border-radius:8px;padding:8px 10px;color:#6b4d0d;margin:0 0 8px">14:20 盘中快照（未收盘）· ' + str(_pv.get('date')) + ' · 抓取于 ' + str(_pv.get('snapshot_at')) + ' · 供尾盘买入参考；已发布的选股记录不会因次日收盘数据而改写</div>')
+    _lbl = '当日收盘快照' if _pv.get('capture') == 'after_close' else '14:20 盘中快照（未收盘）'
+    H.append('<div class="meta" style="background:#fff4d6;border:1px solid #dfc06a;border-radius:8px;padding:8px 10px;color:#6b4d0d;margin:0 0 8px">' + _lbl + ' · ' + str(_pv.get('date')) + ' · 抓取于 ' + str(_pv.get('snapshot_at')) + ' · 供尾盘买入参考；已发布的选股记录不会因次日收盘数据而改写</div>')
 H.append('<h1>表格版 · A股选股策略回测结果</h1>')
 H.append('<div class="meta">' + rng + ' · 全市场5562只 · ' + str(len(picks)) + ' 只标的 · ' + str(len(dates)) + ' 个交易日 · 表头下拉筛选可直接用（无 JS 时显示全部）</div>')
 H.append('<div class="nav"><a href="index.html">← 返回看板</a><a href="garp.html">成长价值筛选（新）</a><a href="#m1">主表</a><a href="#m2">每日组合汇总</a><a href="#m3">事件专表</a><a href="#m4">统计评估</a></div>')

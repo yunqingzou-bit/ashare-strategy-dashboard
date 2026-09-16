@@ -12,19 +12,20 @@ S.trust_env = False
 S.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36',
                   'Referer': 'https://stockpage.10jqka.com.cn/'})
 def log(*a): print(*a, flush=True)
-def in_session_cn(stamp, date_cn=None):
+def snapshot_window(stamp, date_cn=None):
     try:
         t = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S')
     except (TypeError, ValueError):
-        return False
-    if t.weekday() >= 5:
-        return False
-    if date_cn:
-        now_cn = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).replace(tzinfo=None)
-        if t.date().isoformat() != date_cn or t.date() != now_cn.date():
-            return False
+        return None
+    if t.weekday() >= 5 or not date_cn:
+        return None
+    now_cn = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).replace(tzinfo=None)
+    if t.date().isoformat() != date_cn or t.date() != now_cn.date():
+        return None
     hm = t.hour * 60 + t.minute
-    return (550 <= hm <= 700) or (760 <= hm <= 940)
+    if hm < 570 or hm > 1439:
+        return None
+    return 'intraday' if hm < 900 else 'after_close'
 def day_is_final(fetched_at, d):
     if not fetched_at:
         return True
@@ -43,7 +44,8 @@ def apply_snapshot(bars):
         snap = json.load(open(SNAPSHOT, encoding='utf-8'))
     except Exception as e:
         return {'applied': False, 'reason': 'snapshot_unreadable ' + type(e).__name__}
-    if not in_session_cn(snap.get('retrieved_at_cn', ''), snap.get('date_cn')):
+    capture = snapshot_window(snap.get('retrieved_at_cn', ''), snap.get('date_cn'))
+    if not capture:
         return {'applied': False, 'reason': 'outside_session', 'snapshot_at': snap.get('retrieved_at_cn'),
                 'source': snap.get('source')}
     date_cn = snap.get('date_cn'); injected = 0; matched = 0; rejected = 0
@@ -67,7 +69,7 @@ def apply_snapshot(bars):
     return {'applied': bool(injected), 'date': date_cn if injected else None, 'injected': injected,
             'matched': matched, 'rejected': rejected, 'universe': len(bars),
             'snapshot_at': snap.get('retrieved_at_cn'), 'source': snap.get('source'),
-            'quote_time': snap.get('quote_time')}
+            'quote_time': snap.get('quote_time'), 'capture': capture}
 def ths_line(code):
     for fq in ('01', '00'):
         url = 'https://d.10jqka.com.cn/v6/line/hs_' + code + '/' + fq + '/last.js'

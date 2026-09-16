@@ -26,6 +26,32 @@ def session():
         LOCAL['s'].headers.update({'User-Agent': 'Mozilla/5.0'})
     return LOCAL['s']
 
+def universe():
+    if BARS.exists():
+        try:
+            return sorted(json.loads(BARS.read_text(encoding='utf-8')).get('bars') or {})
+        except Exception:
+            pass
+    names = {}
+    s = session(); s.headers['Referer'] = 'https://finance.sina.com.cn/'
+    url = 'https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData'
+    for page in range(1, 95):
+        try:
+            txt = s.get(url, params={'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'hs_a',
+                                     'symbol': '', '_s_r_a': 'page'}, timeout=25).text.strip()
+            if not txt.startswith('['):
+                break
+            rows = json.loads(txt)
+        except Exception:
+            break
+        if not rows:
+            break
+        for r in rows:
+            code = str(r.get('code') or '').zfill(6)
+            if len(code) == 6:
+                names[code] = 1
+    return sorted(names)
+
 def eastmoney(pz, pause):
     rows = {}; page = 1; total = None
     while True:
@@ -61,7 +87,7 @@ def eastmoney(pz, pause):
     return rows, total
 
 def tencent(batch, workers):
-    codes = sorted(json.loads(BARS.read_text(encoding='utf-8'))['bars'])
+    codes = universe()
     rows = {}; times = []
 
     def one(chunk):

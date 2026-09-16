@@ -34,7 +34,7 @@ $('period').textContent=`${D.start} — ${D.end} · ${D.trading_days}个交易�
 $('runtime').textContent=`参考 Skill v${D.runtime.skill_version} / contract ${D.runtime.contract_revision}；本页为独立A股适配器，未通过原Skill严格发布审计。`;
 $('coverage').textContent=`当前名单${D.acquisition.listing_count}只，行情${D.acquisition.bar_count}只。`+Object.entries(D.acquisition.sources).map(([k,v])=>`${({gjzb:'财务指标',llb:'现金流量表',fzb:'资产负债表',raw_prices:'估值用不复权行情'})[k]||k}：${v.resolved}/${v.attempted}`).join('；')+'。数据缺失不会被当作达标。';
 $('rules').innerHTML=D.rules.map(([k,v])=>`<tr><td>${escapeHTML(k)}</td><td>${escapeHTML(v)}</td></tr>`).join('');
-const pv=D.provisional||{};if(pv.applied){const el=$("snap");el.hidden=false;el.innerHTML="<b>"+pv.date+" 14:20 盘中快照（未收盘）</b> · 当日价格与涨跌来自实时快照源（"+escapeHTML(pv.source||"-")+"，抓取于 "+escapeHTML(pv.snapshot_at||"-")+"），供尾盘买入参考。本行为未收盘数据，与最终收盘存在约1%的中位差异；已发布的入选记录不会因次日收盘数据而改写。"}
+const pv=D.provisional||{};if(pv.applied){const el=$("snap");el.hidden=false;el.innerHTML="<b>"+pv.date+" "+(pv.capture==='after_close'?'当日收盘快照':'14:20 盘中快照（未收盘）')+"</b> · 当日价格与涨跌来自实时快照源（"+escapeHTML(pv.source||"-")+"，抓取于 "+escapeHTML(pv.snapshot_at||"-")+"），供尾盘买入参考。本行为未收盘数据，与最终收盘存在约1%的中位差异；已发布的入选记录不会因次日收盘数据而改写。"}
 const non=D.stats.nonoverlap;$('nonoverlap').textContent=`全样本去重观察：同一股票信号后5个交易日内不重复计样本，已满5日 ${non.n} 条，累计为正比例 ${num(non.positive_pct)}%，平均5日涨幅 ${pct(non.mean_cum)}。不同股票仍存在市场相关性；本统计不随筛选变化。`;
 for(const k of ['start','end','search','sort'])if(params.has(k))$(k).value=params.get(k);
 const catOptions=k=>[...new Set(D.rows.map(r=>r[k]))].sort((a,b)=>k==='date'?b.localeCompare(a):a.localeCompare(b));

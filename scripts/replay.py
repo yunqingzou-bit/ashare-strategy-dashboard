@@ -94,7 +94,7 @@ def rebuild(c, D):
         return None
     return {'code': c, 'name': names.get(c), 'score': 0.0, 'cls': 'other', 'lb': 0,
             'close': m['close'], 'pct': m['pct'], 'board': s2b.get(c), 'vr': m['vr5'], 'to': m['to'],
-            'cap': m['float_cap'], 'rsi': m['rsi14'], 'ret20': m['ret20'], 'sub': [0, 0, 0, 0, 0, 0]}
+            'cap': m['float_cap'], 'rsi': m['rsi14'], 'ret20': m['ret20'], 'sub': [0, 0, 0, 0, 0, 0], 'p': p}
 picks = []; rets = {k: [] for k in range(1,6)}; sector_cache = {}
 def board_pct(D):
     if D in sector_cache: return sector_cache[D]

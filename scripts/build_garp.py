@@ -13,7 +13,7 @@ RULES=[
  ('现金流初筛','标准FCF＝经营活动现金净额−购建长期资产现金支出；TTM＝上年全年＋本年累计−上年同期；FCF收益率≥3%。未扣SBC。'),
  ('质量初筛','最近已公布年度的供应商ROIC≥8%；最新资产负债率≤60%。资产负债率不是净债务/EBITDA，未据此宣称通过原Skill杠杆门。'),
  ('历史时点','使用供应商公告日期，并从公告后交易日启用；最新修订版财报、报表间股本变化、历史ST/退市名单仍可能引入偏差，不是严格点时数据库回测。'),
- ('更新时点','每个交易日北京时间14:20运行，用全市场实时快照生成当日盘中数据，供尾盘买入参考。当日行标记为盘中快照，未收盘，次日不会改写已发布的入选记录。'),
+ ('更新时点','每个交易日北京时间14:20运行，用全市场实时快照生成当日盘中数据，供尾盘买入参考。当日行标记为盘中快照，若为当日收盘后补跑则标记为收盘后快照，次日不会改写已发布的入选记录。'),
  ('盘中快照口径','当日价格与成交数据来自实时快照源，与历史序列源不同；实测两源在历史收盘上完全一致，当日价格存在约1%的中位差异。T+1以快照价为基准，T+2至T+5为收盘对收盘，五日累计仍等于逐日复合。'),
  ('记录不可改写','已发布的入选记录按日期与代码冻结：后续运行只更新其T+1至T+5结果，不改变入选名单、入场价与当日涨幅，因此历史胜率可复核。'),
  ('未完成的原Skill验证','缺少历史一致预期、独立2–3年预测、SBC调整、摊薄股本CAGR、净债务/EBITDA及逐家公司一手核验。所有适配候选均为review_required；严格版已核验入选数为0，不等于市场没有合格股票。'),
@@ -143,7 +143,7 @@ def run():
             if date<window[0]:continue
             prior=previous.get((date,code)) or {}
             entry=prior.get('entry_price') or prior.get('raw_close') or price
-            entry_source=prior.get('entry_source') or ('intraday_snapshot' if (prov.get('applied') and prov.get('date')==date) else 'close')
+            entry_source=prior.get('entry_source') or ('intraday_snapshot' if (prov.get('applied') and prov.get('date')==date and prov.get('capture')!='after_close') else 'close')
             rr,cum,win,future=returns(v,i,cal,date,entry)
             ref=code+'-'+f['period']
             row=dict(date=date,code=code,name=prior.get('name') or name,shape=prior.get('shape') or shape(v,i),pct=prior.get('pct',(v[i][2]/v[i-1][2]-1)*100),cum=cum,win=win,status='review_required',future_dates=future,streak_days=prior.get('streak_days') or len(streak),financial_ref=prior.get('financial_ref') or ref,pe_ttm=prior.get('pe_ttm',pe),fcf_yield=prior.get('fcf_yield',fy),cap_yi=prior.get('cap_yi',cap/1e8),amount_wan=prior.get('amount_wan',amount/1e4),raw_close=price,entry_price=entry,entry_source=entry_source,eps_yoy=f['eps_yoy'],revenue_yoy=f['revenue_yoy'],roic=f['roic'],debt_ratio=f['debt_ratio'])
