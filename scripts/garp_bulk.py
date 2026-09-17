@@ -32,7 +32,7 @@ def get_page(source,period,page,refresh):
             time.sleep(1+attempt)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--refresh',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--refresh',action='store_true');ap.add_argument('--workers',type=int,default=10);a=ap.parse_args()
     b=json.loads((ROOT/'data/bars.json').read_text(encoding='utf-8'));end=max(v[-1][0] for v in b['bars'].values());year=int(end[:4])
     periods=[str(year-2)+'1231']+[str(y)+q for y in (year-1,year) for q in ('0331','0630','0930','1231') if str(y)+q<=end.replace('-','')]
     audit={'provider':'Eastmoney bulk statements','started_at':dt.datetime.now(dt.timezone.utc).isoformat(),'price_end':end,'listing_count':len(b['names']),'bar_count':len(b['bars']),'sources':{},'pagination':[],'candidate_codes':[]}
@@ -40,7 +40,7 @@ def main():
         companies=defaultdict(lambda:{'data':{'report_list':{}},'source':source,'provider':'Eastmoney'})
         for p in periods:
             first=get_page(source,p,1,a.refresh);pages=[first]
-            with cf.ThreadPoolExecutor(max_workers=3) as pool:
+            with cf.ThreadPoolExecutor(max_workers=min(4,a.workers)) as pool:
                 pages+=list(pool.map(lambda n:get_page(source,p,n,a.refresh),range(2,first['result']['pages']+1)))
             count=sum(len(v['result']['data']) for v in pages)
             if count!=first['result']['count']:raise ValueError(f'Partial pagination {source}/{p}: {count}')
@@ -60,7 +60,7 @@ def main():
         audit['sources'][source]={'attempted':len(b['bars']),'resolved':len(companies),'failed':[{'code':c,'reason':'No vendor financial rows in requested periods'} for c in b['bars'] if c not in companies]}
         if source=='gjzb':audit['candidate_codes']=sorted(c for c,p in companies.items() if needs_cashflow(p,end))
         save(ROOT/'data/garp-acquisition.json',audit)
-    audit['sources']['raw_prices']=prices(audit['candidate_codes'],a.refresh,4,end)
+    audit['sources']['raw_prices']=prices(audit['candidate_codes'],a.refresh,a.workers,end)
     audit['finished_at']=dt.datetime.now(dt.timezone.utc).isoformat();save(ROOT/'data/garp-acquisition.json',audit)
     print('acquisition complete',len(audit['candidate_codes']),'candidate packets',flush=True)
 

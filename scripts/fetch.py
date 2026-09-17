@@ -37,13 +37,14 @@ def day_is_final(fetched_at, d):
         stamp = stamp.replace(tzinfo=datetime.timezone.utc)
     close = datetime.datetime.strptime(d, '%Y-%m-%d').replace(hour=7, minute=10, tzinfo=datetime.timezone.utc)
     return stamp >= close
-def apply_snapshot(bars):
-    if not os.path.exists(SNAPSHOT):
-        return {'applied': False, 'reason': 'no_snapshot'}
-    try:
-        snap = json.load(open(SNAPSHOT, encoding='utf-8'))
-    except Exception as e:
-        return {'applied': False, 'reason': 'snapshot_unreadable ' + type(e).__name__}
+def apply_snapshot(bars, snap=None):
+    if snap is None:
+        if not os.path.exists(SNAPSHOT):
+            return {'applied': False, 'reason': 'no_snapshot'}
+        try:
+            snap = json.load(open(SNAPSHOT, encoding='utf-8'))
+        except Exception as e:
+            return {'applied': False, 'reason': 'snapshot_unreadable ' + type(e).__name__}
     capture = snapshot_window(snap.get('retrieved_at_cn', ''), snap.get('date_cn'))
     if not capture:
         return {'applied': False, 'reason': 'outside_session', 'snapshot_at': snap.get('retrieved_at_cn'),
@@ -98,31 +99,36 @@ def universe():
     names = {}
     url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
     for page in range(1, 90):
-        try:
-            txt = S.get(url, params={"page": page, "num": 100, "sort": "symbol", "asc": 1, "node": "hs_a", "symbol": "", "_s_r_a": "page"}, headers=H, timeout=25).text.strip()
-            if not txt.startswith("["):
-                break
-            rows = json.loads(txt)
-            if not rows:
-                break
-            for r in rows:
-                c = str(r.get("code") or "").zfill(6)
-                if len(c) == 6:
-                    names[c] = str(r.get("name") or "")
-        except Exception as e:
-            log("universe page", page, "failed", type(e).__name__)
+        rows = None
+        for attempt in range(3):
+            try:
+                txt = S.get(url, params={"page": page, "num": 100, "sort": "symbol", "asc": 1, "node": "hs_a", "symbol": "", "_s_r_a": "page"}, headers=H, timeout=25).text.strip()
+                if txt.startswith("["):
+                    rows = json.loads(txt)
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5 * (attempt + 1))
+        if rows is None:
+            log("universe page", page, "unreadable after retries; stopping")
             break
-        if len(names) == 0 and page >= 3:
+        if not rows:
             break
+        for r in rows:
+            c = str(r.get("code") or "").zfill(6)
+            if len(c) == 6:
+                names[c] = str(r.get("name") or "")
     return names
 def refresh_bars():
     names = universe()
     log("universe from sina", len(names))
-    if len(names) < 3000:
+    if len(names) < 5000:
         try:
             import akshare as ak
             df = ak.stock_info_a_code_name()
-            names = {str(r["code"]).zfill(6): str(r["name"]) for _, r in df.iterrows()}
+            alt = {str(r["code"]).zfill(6): str(r["name"]) for _, r in df.iterrows()}
+            if len(alt) > len(names):
+                names = alt
             log("universe fallback akshare", len(names))
         except Exception as e:
             log("universe fallback failed", type(e).__name__)
@@ -176,7 +182,13 @@ def main():
         names = loaded['names']; bars = loaded['bars']
     else:
         names, bars = refresh_bars()
-    prov = apply_snapshot(bars)
+    snap = None
+    try:
+        import snapshot as snapmod
+        snap = snapmod.fetch(codes=sorted(bars), log=log)
+    except Exception as e:
+        log('snapshot fetch failed', type(e).__name__, str(e)[:140])
+    prov = apply_snapshot(bars, snap)
     log('snapshot', json.dumps(prov, ensure_ascii=False, default=str))
     json.dump({'names': names, 'bars': bars, 'provisional': prov},
               open(os.path.join(DATA, 'bars.json'), 'w', encoding='utf-8'), ensure_ascii=False)

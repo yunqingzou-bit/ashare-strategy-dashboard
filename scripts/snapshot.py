@@ -1,5 +1,10 @@
-"""Whole-market snapshot for the current session. Primary source East Money, fallback Tencent."""
-import argparse, datetime as dt, json, os, time
+"""Whole-market snapshot for the current session. East Money first, Tencent fallback.
+
+fetch() is called by fetch.py after the bar universe is known, so the snapshot always
+covers exactly the codes we screen. Coverage below MIN_COVERAGE is refused so a partial
+snapshot can never be published as if it were the whole market.
+"""
+import argparse, datetime as dt, json, os, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import requests
@@ -12,6 +17,8 @@ EM_URL = 'https://push2.eastmoney.com/api/qt/clist/get'
 EM_FS = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'
 EM_FIELDS = 'f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f23'
 GT_URL = 'https://qt.gtimg.cn/q='
+MIN_UNIVERSE = 5000
+MIN_COVERAGE = 0.6
 LOCAL = {}
 
 def num(x):
@@ -26,23 +33,24 @@ def session():
         LOCAL['s'].headers.update({'User-Agent': 'Mozilla/5.0'})
     return LOCAL['s']
 
-def universe():
-    if BARS.exists():
-        try:
-            return sorted(json.loads(BARS.read_text(encoding='utf-8')).get('bars') or {})
-        except Exception:
-            pass
+def sina_universe(retries=3, pages=95):
     names = {}
     s = session(); s.headers['Referer'] = 'https://finance.sina.com.cn/'
     url = 'https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData'
-    for page in range(1, 95):
-        try:
-            txt = s.get(url, params={'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'hs_a',
-                                     'symbol': '', '_s_r_a': 'page'}, timeout=25).text.strip()
-            if not txt.startswith('['):
-                break
-            rows = json.loads(txt)
-        except Exception:
+    for page in range(1, pages):
+        rows = None
+        for attempt in range(retries):
+            try:
+                txt = s.get(url, params={'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1,
+                                         'node': 'hs_a', 'symbol': '', '_s_r_a': 'page'}, timeout=25).text.strip()
+                if txt.startswith('['):
+                    rows = json.loads(txt)
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5 * (attempt + 1))
+        if rows is None:
+            print('sina page %d unreadable after retries; stopping' % page, file=sys.stderr)
             break
         if not rows:
             break
@@ -50,7 +58,29 @@ def universe():
             code = str(r.get('code') or '').zfill(6)
             if len(code) == 6:
                 names[code] = 1
+    if len(names) < MIN_UNIVERSE:
+        try:
+            import akshare as ak
+            df = ak.stock_info_a_code_name()
+            alt = {str(r['code']).zfill(6): 1 for _, r in df.iterrows()}
+            if len(alt) > len(names):
+                print('universe: sina %d -> akshare %d' % (len(names), len(alt)), file=sys.stderr)
+                names = alt
+        except Exception as e:
+            print('universe: akshare fallback failed %s' % type(e).__name__, file=sys.stderr)
     return sorted(names)
+
+def universe(codes=None):
+    if codes:
+        return sorted(codes)
+    if BARS.exists():
+        try:
+            got = sorted(json.loads(BARS.read_text(encoding='utf-8')).get('bars') or {})
+            if len(got) >= MIN_UNIVERSE:
+                return got
+        except Exception:
+            pass
+    return sina_universe()
 
 def eastmoney(pz, pause):
     rows = {}; page = 1; total = None
@@ -86,8 +116,7 @@ def eastmoney(pz, pause):
             time.sleep(pause)
     return rows, total
 
-def tencent(batch, workers):
-    codes = universe()
+def tencent(codes, batch, workers):
     rows = {}; times = []
 
     def one(chunk):
@@ -122,6 +151,36 @@ def tencent(batch, workers):
                               'pb': num(f[46])}
     return rows, (sorted(times)[len(times) // 2] if times else None)
 
+def fetch(codes=None, pz=100, pause=0.2, batch=50, workers=8, log=print):
+    codes = universe(codes)
+    now = dt.datetime.now(dt.timezone.utc)
+    rows = {}; total = None; quote_time = None; source = None; note = None
+    try:
+        got, total = eastmoney(pz, pause)
+        if len(got) >= 3000:
+            rows = got; source = 'eastmoney push2 qt/clist/get'
+        else:
+            note = 'eastmoney rows too few (%d)' % len(got)
+    except Exception as e:
+        note = 'eastmoney failed: ' + type(e).__name__
+    if not rows:
+        rows, quote_time = tencent(codes, batch, workers)
+        source = 'tencent qt.gtimg.cn'
+    cover = (len(rows) / len(codes)) if codes else 0.0
+    if cover < MIN_COVERAGE:
+        log(json.dumps({'source': source, 'note': note, 'count': len(rows), 'universe': len(codes),
+                        'coverage': round(cover, 3), 'rejected': 'coverage_below_minimum'}, ensure_ascii=False))
+        return None
+    out = {'source': source, 'note': note, 'retrieved_at': now.isoformat(),
+           'retrieved_at_cn': now.astimezone(CN).strftime('%Y-%m-%d %H:%M:%S'),
+           'date_cn': now.astimezone(CN).strftime('%Y-%m-%d'), 'quote_time': quote_time,
+           'provider_total': total, 'universe': len(codes), 'count': len(rows), 'rows': rows}
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding='utf-8')
+    log(json.dumps({'source': source, 'note': note, 'count': len(rows), 'universe': len(codes),
+                    'quote_time': quote_time, 'at': out['retrieved_at_cn']}, ensure_ascii=False))
+    return out
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--pz', type=int, default=100)
@@ -131,30 +190,8 @@ def main():
     a = ap.parse_args()
     for k in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
         os.environ.pop(k, None)
-    now = dt.datetime.now(dt.timezone.utc); source = None; note = None
-    rows = {}; total = None; quote_time = None
-    try:
-        rows, total = eastmoney(a.pz, a.pause)
-        if len(rows) >= 3000:
-            source = 'eastmoney push2 qt/clist/get'
-        else:
-            note = 'eastmoney rows too few (%d)' % len(rows); rows = {}
-    except Exception as e:
-        note = 'eastmoney failed: ' + type(e).__name__
-    if not rows:
-        rows, quote_time = tencent(a.batch, a.workers)
-        source = 'tencent qt.gtimg.cn'
-        total = len(rows) if total is None else total
-    if not rows:
-        raise SystemExit('snapshot empty; keeping previous data')
-    out = {'source': source, 'note': note, 'retrieved_at': now.isoformat(),
-           'retrieved_at_cn': now.astimezone(CN).strftime('%Y-%m-%d %H:%M:%S'),
-           'date_cn': now.astimezone(CN).strftime('%Y-%m-%d'), 'quote_time': quote_time,
-           'provider_total': total, 'count': len(rows), 'rows': rows}
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(out, ensure_ascii=False, allow_nan=False), encoding='utf-8')
-    print(json.dumps({'source': source, 'note': note, 'count': len(rows), 'quote_time': quote_time,
-                      'at': out['retrieved_at_cn']}, ensure_ascii=False))
+    if fetch(pz=a.pz, pause=a.pause, batch=a.batch, workers=a.workers) is None:
+        raise SystemExit('snapshot rejected: coverage too low')
 
 if __name__ == '__main__':
     main()
