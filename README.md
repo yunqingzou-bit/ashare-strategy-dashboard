@@ -4,6 +4,10 @@
 
 在线看板：https://yunqingzou-bit.github.io/ashare-strategy-dashboard/
 
+个股监控：https://yunqingzou-bit.github.io/ashare-strategy-dashboard/monitor.html
+
+个股监控支持按 A 股名称或代码查询，展示 MA、RSI、MACD、量价、20 日支撑/压力及透明的规则触发原因；自选和持仓仅保存在用户浏览器。行情由 GitHub Actions 定时抓取，页面会明确标注行情日期和“最近收盘/盘中快照”，不宣称实时行情。
+
 ## 目录结构
 
 ```

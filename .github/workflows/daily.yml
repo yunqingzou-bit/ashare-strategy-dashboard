@@ -1,5 +1,11 @@
 name: daily-update
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build_monitor.py'
+      - 'docs/monitor.*'
+      - 'tests/test_build_monitor.py'
   schedule:
     - cron: '20 6 * * 1-5'
   workflow_dispatch:
