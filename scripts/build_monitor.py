@@ -86,6 +86,21 @@ def analyse(code, name, rows):
     if price <= support * 1.015:
         stance = "临近支撑 / 严格观察破位"
 
+    invalidation = min(support, ma20 * 0.985)
+    pullback_low = max(support, ma20 * 0.99)
+    pullback_high = max(pullback_low, ma20 * 1.015)
+    first_target = max(price, ma5, ma10)
+    second_target = max(first_target, resistance)
+    breakout = resistance * 1.005
+    if score >= 75:
+        posture, sell_pct = "核心持有，冲高分批兑现；只在突破后回踩确认时考虑换回", [15, 20]
+    elif score >= 60:
+        posture, sell_pct = "保留观察仓，靠近压力分批降风险，不在压力下方追涨", [20, 25]
+    elif score >= 45:
+        posture, sell_pct = "等待方向，反弹优先回收现金，破位则进一步收缩仓位", [25, 25]
+    else:
+        posture, sell_pct = "风险优先，反弹减仓；收盘破位时执行纪律而非等待回本", [30, 30]
+
     return {
         "code": code, "name": name, "date": last[0], "price": round_or_none(price),
         "pct": round_or_none(pct), "open": round_or_none(float(last[1])),
@@ -97,6 +112,13 @@ def analyse(code, name, rows):
         "volumeRatio5": round_or_none(vr, 2), "support20": round_or_none(support),
         "resistance20": round_or_none(resistance), "score": score, "stance": stance,
         "reasons": reasons or ["暂无明确增强信号"], "risks": risks or ["未触发主要技术风险规则"],
+        "wavePlan": {
+            "horizon": "1—2周", "posture": posture,
+            "pullbackLow": round_or_none(pullback_low), "pullbackHigh": round_or_none(pullback_high),
+            "firstTarget": round_or_none(first_target), "secondTarget": round_or_none(second_target),
+            "breakoutTrigger": round_or_none(breakout), "invalidation": round_or_none(invalidation),
+            "firstSellPct": sell_pct[0], "secondSellPct": sell_pct[1],
+        },
     }
 
 
@@ -114,7 +136,7 @@ def build_payload(source):
         "dataMode": "盘中快照（非实时）" if provisional.get("applied") else "最近收盘数据",
         "source": "同花顺日线；盘中快照若可用则来自公开行情接口",
         "provisional": provisional,
-        "ruleVersion": "technical-rules-v1",
+        "ruleVersion": "technical-rules-v2-wave",
         "stocks": stocks,
     }
 

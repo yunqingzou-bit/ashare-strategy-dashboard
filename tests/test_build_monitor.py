@@ -14,4 +14,9 @@ class MonitorTests(unittest.TestCase):
     def test_payload_declares_periodic_mode(self):
         p=M.build_payload({"names":{"000001":"测试"},"bars":{"000001":self.rows()},"provisional":{"applied":False}})
         self.assertEqual(p["dataMode"],"最近收盘数据"); self.assertEqual(len(p["stocks"]),1)
+    def test_wave_plan_has_ordered_risk_levels(self):
+        item=M.analyse("000001","测试",self.rows(True)); plan=item["wavePlan"]
+        self.assertLess(plan["invalidation"],item["price"])
+        self.assertGreaterEqual(plan["secondTarget"],plan["firstTarget"])
+        self.assertEqual(plan["horizon"],"1—2周")
 if __name__ == "__main__": unittest.main()
