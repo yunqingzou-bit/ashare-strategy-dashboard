@@ -235,7 +235,9 @@ def build_payload(source):
             q = (source.get("quote_metrics") or {}).get(code) or {}
             item["valuation"] = {"pe": round_or_none(q.get("pe")), "pb": round_or_none(q.get("pb")),
                                  "totalMv": round_or_none(q.get("total_mv"), 0), "floatMv": round_or_none(q.get("float_mv"), 0),
-                                 "asOf": (source.get("provisional") or {}).get("snapshot_at"), "source": (source.get("provisional") or {}).get("source")}
+                                 "asOf": item["date"] + (" 收盘" if item["date"] else ""),
+                                 "retrievedAt": (source.get("provisional") or {}).get("snapshot_at"),
+                                 "source": (source.get("provisional") or {}).get("source")}
             item["industry"] = code_industry.get(code)
             item["news"] = sorted(news_by_code.get(code, []), key=lambda x: x["date"], reverse=True)[:2]
             words = (item["industry"] or "").replace("板块", "")
