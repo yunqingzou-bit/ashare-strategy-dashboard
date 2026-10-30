@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/build_monitor.py'
+      - 'scripts/build_site.py'
+      - 'scripts/assets/dash_add.css'
       - 'docs/monitor.*'
       - 'tests/test_build_monitor.py'
   schedule:
