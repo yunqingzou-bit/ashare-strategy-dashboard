@@ -255,18 +255,8 @@ def build_payload(source):
     }
 
 
-def main():
-    os.makedirs(DOCS, exist_ok=True)
-    source = json.load(open(DATA, encoding="utf-8"))
-    payload = build_payload(source)
-    bad = {}
-    for item in payload["stocks"]:
-        for name in level_violations(item):
-            bad[name] = bad.get(name, 0) + 1
-    if bad:
-        print("LEVEL INVARIANTS FAILED", json.dumps(bad, ensure_ascii=False))
-        raise SystemExit(1)
-    out = os.path.join(DOCS, "monitor")
+def write_outputs(payload, docs_dir):
+    out = os.path.join(docs_dir, "monitor")
     os.makedirs(out, exist_ok=True)
     shards = {}
     for item in payload["stocks"]:
@@ -279,9 +269,24 @@ def main():
     meta = {k: v for k, v in payload.items() if k != "stocks"}
     with open(os.path.join(out, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, separators=(",", ":"))
-    legacy = os.path.join(DOCS, "monitor-data.json")
+    legacy = os.path.join(docs_dir, "monitor-data.json")
     if os.path.exists(legacy):
         os.remove(legacy)
+    return shards
+
+
+def main():
+    os.makedirs(DOCS, exist_ok=True)
+    source = json.load(open(DATA, encoding="utf-8"))
+    payload = build_payload(source)
+    bad = {}
+    for item in payload["stocks"]:
+        for name in level_violations(item):
+            bad[name] = bad.get(name, 0) + 1
+    if bad:
+        print("LEVEL INVARIANTS FAILED", json.dumps(bad, ensure_ascii=False))
+        raise SystemExit(1)
+    shards = write_outputs(payload, DOCS)
     print("monitor shards", len(shards), "stocks", len(payload["stocks"]), payload["marketDate"])
 
 

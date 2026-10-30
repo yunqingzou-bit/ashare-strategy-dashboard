@@ -1,4 +1,4 @@
-import importlib.util, pathlib, random, unittest
+import importlib.util, json, pathlib, random, tempfile, unittest
 P = pathlib.Path(__file__).parents[1] / "scripts" / "build_monitor.py"
 S = importlib.util.spec_from_file_location("build_monitor", P); M = importlib.util.module_from_spec(S); S.loader.exec_module(M)
 class MonitorTests(unittest.TestCase):
@@ -48,4 +48,16 @@ class MonitorTests(unittest.TestCase):
             if item is None: continue
             M.repair_levels(item)
             self.assertEqual(M.level_violations(item),[],msg=str(item["wavePlan"]))
+    def test_outputs_are_sharded_with_universe_and_meta(self):
+        a=M.analyse("300432","富临精工",self.rows(True)); b=M.analyse("002487","大金重工",self.rows(False))
+        for item in (a,b): M.repair_levels(item)
+        payload={"generatedAt":"2026-10-31T00:00:00+08:00","marketDate":"2026-10-30","dataMode":"最近收盘数据","stocks":[a,b]}
+        with tempfile.TemporaryDirectory() as d:
+            shards=M.write_outputs(payload,d)
+            self.assertEqual(set(shards),{"30","00"})
+            uni=json.load(open(pathlib.Path(d)/"monitor"/"universe.json",encoding="utf-8"))
+            meta=json.load(open(pathlib.Path(d)/"monitor"/"meta.json",encoding="utf-8"))
+            self.assertEqual(len(uni),2); self.assertNotIn("stocks",meta)
+            shard=json.load(open(pathlib.Path(d)/"monitor"/"30.json",encoding="utf-8"))
+            self.assertEqual(shard["stocks"][0]["code"],"300432")
 if __name__ == "__main__": unittest.main()
