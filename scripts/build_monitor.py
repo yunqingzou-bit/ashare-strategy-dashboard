@@ -266,9 +266,23 @@ def main():
     if bad:
         print("LEVEL INVARIANTS FAILED", json.dumps(bad, ensure_ascii=False))
         raise SystemExit(1)
-    with open(os.path.join(DOCS, "monitor-data.json"), "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-    print("monitor-data.json", len(payload["stocks"]), "stocks", payload["marketDate"])
+    out = os.path.join(DOCS, "monitor")
+    os.makedirs(out, exist_ok=True)
+    shards = {}
+    for item in payload["stocks"]:
+        shards.setdefault(item["code"][:2], []).append(item)
+    for key, rows in shards.items():
+        with open(os.path.join(out, key + ".json"), "w", encoding="utf-8") as f:
+            json.dump({"stocks": rows}, f, ensure_ascii=False, separators=(",", ":"))
+    with open(os.path.join(out, "universe.json"), "w", encoding="utf-8") as f:
+        json.dump([[s["code"], s["name"]] for s in payload["stocks"]], f, ensure_ascii=False, separators=(",", ":"))
+    meta = {k: v for k, v in payload.items() if k != "stocks"}
+    with open(os.path.join(out, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, separators=(",", ":"))
+    legacy = os.path.join(DOCS, "monitor-data.json")
+    if os.path.exists(legacy):
+        os.remove(legacy)
+    print("monitor shards", len(shards), "stocks", len(payload["stocks"]), payload["marketDate"])
 
 
 if __name__ == "__main__":
