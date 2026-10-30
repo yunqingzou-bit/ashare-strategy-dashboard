@@ -41,6 +41,50 @@ def round_or_none(value, digits=2):
     return None if value is None or not math.isfinite(value) else round(value, digits)
 
 
+def repair_levels(item):
+    """Enforce invalidation < price < targets, and keep zones on the correct side."""
+    plan = item["wavePlan"]
+    price = round(item["price"], 2)
+    plan["invalidation"] = min(round(plan["invalidation"], 2), round(price - 0.02, 2))
+    plan["firstTarget"] = max(round(plan["firstTarget"], 2), round(price + 0.03, 2))
+    plan["secondTarget"] = max(round(plan["secondTarget"], 2), round(plan["firstTarget"] + 0.03, 2))
+    plan["breakoutTrigger"] = min(max(round(plan["breakoutTrigger"], 2), plan["firstTarget"]), plan["secondTarget"])
+    if plan.get("aboveMa20"):
+        high = min(round(plan["pullbackHigh"], 2), round(price - 0.01, 2))
+        low = min(round(plan["pullbackLow"], 2), round(high - 0.01, 2))
+        plan["pullbackHigh"], plan["pullbackLow"] = high, low
+        plan["bounceLow"] = plan["bounceHigh"] = None
+    else:
+        low = max(round(plan["bounceLow"], 2), round(price + 0.01, 2))
+        high = max(round(plan["bounceHigh"], 2), round(low + 0.01, 2))
+        plan["bounceLow"], plan["bounceHigh"] = low, high
+        plan["pullbackLow"] = plan["pullbackHigh"] = None
+
+
+def level_violations(item):
+    plan, price = item["wavePlan"], item["price"]
+    bad = []
+    if not plan["invalidation"] < price:
+        bad.append("invalidation>=price")
+    if not plan["firstTarget"] > price:
+        bad.append("firstTarget<=price")
+    if not plan["secondTarget"] >= plan["firstTarget"]:
+        bad.append("second<first")
+    if not plan["firstTarget"] <= plan["breakoutTrigger"] <= plan["secondTarget"]:
+        bad.append("breakout_out_of_range")
+    if plan.get("aboveMa20"):
+        if not plan["pullbackHigh"] < price:
+            bad.append("pullbackAbovePrice")
+        if not plan["pullbackLow"] < plan["pullbackHigh"]:
+            bad.append("pullbackInverted")
+    else:
+        if not plan["bounceLow"] > price:
+            bad.append("bounceBelowPrice")
+        if not plan["bounceHigh"] >= plan["bounceLow"]:
+            bad.append("bounceInverted")
+    return bad
+
+
 def macd_window(values, window=None):
     series = values[-window:] if window else values
     if len(series) < 26:
@@ -100,12 +144,25 @@ def analyse(code, name, rows):
     if price <= support * 1.015:
         stance = "临近支撑 / 严格观察破位"
 
-    invalidation = min(support, ma20 * 0.985)
-    pullback_low = max(support, ma20 * 0.99)
-    pullback_high = max(pullback_low, ma20 * 1.015)
-    first_target = max(price, ma5, ma10)
-    second_target = max(first_target, resistance)
-    breakout = resistance * 1.005
+    # Price levels must obey fixed relations: invalidation < price < targets.
+    # A pullback zone only exists above MA20; otherwise show rebound resistance.
+    above_ma20 = price > ma20 * 1.005
+    if above_ma20:
+        pullback_low = max(min(support, price * 0.995), ma20 * 0.985)
+        pullback_high = min(ma20 * 1.01, price * 0.995)
+        if pullback_low >= pullback_high:
+            pullback_low, pullback_high = price * 0.97, price * 0.99
+        bounce_low = bounce_high = None
+    else:
+        pullback_low = pullback_high = None
+        bounce_low = max(price * 1.01, ma20 * 0.99)
+        bounce_high = max(bounce_low * 1.01, ma20 * 1.015)
+
+    invalidation = min(price * 0.97, support * 0.99, ma20 * 0.98)
+    first_target = max(price * 1.03, ma5, ma10)
+    breakup = max(resistance, price * 1.01) * 1.005
+    second_target = max(first_target * 1.03, resistance, breakup)
+    breakout = min(breakup, second_target)
     if score >= 75:
         posture, sell_pct = "核心持有，冲高分批兑现；只在突破后回踩确认时考虑换回", [15, 20]
     elif score >= 60:
@@ -130,7 +187,6 @@ def analyse(code, name, rows):
                     "day120": round_or_none(macd_window(closes, 120), 3)},
         "volumeRatio5": round_or_none(vr, 2),
         "volumeSet": {"today": round_or_none(volumes[-1], 0), "avg5": round_or_none(vol5, 0),
-                      "avg10": round_or_none(vol10, 0), "avg20": round_or_none(vol20, 0),
                       "ratio5": round_or_none(vr, 2),
                       "ratio10": round_or_none(volumes[-1] / vol10 if vol10 else None, 2),
                       "ratio20": round_or_none(volumes[-1] / vol20 if vol20 else None, 2)},
@@ -142,7 +198,9 @@ def analyse(code, name, rows):
         "reasons": reasons or ["暂无明确增强信号"], "risks": risks or ["未触发主要技术风险规则"],
         "wavePlan": {
             "horizon": "1—2周", "posture": posture,
+            "aboveMa20": above_ma20,
             "pullbackLow": round_or_none(pullback_low), "pullbackHigh": round_or_none(pullback_high),
+            "bounceLow": round_or_none(bounce_low), "bounceHigh": round_or_none(bounce_high),
             "firstTarget": round_or_none(first_target), "secondTarget": round_or_none(second_target),
             "breakoutTrigger": round_or_none(breakout), "invalidation": round_or_none(invalidation),
             "firstSellPct": sell_pct[0], "secondSellPct": sell_pct[1],
@@ -169,7 +227,7 @@ def build_payload(source):
             code = str(row.get("代码") or row.get("股票代码") or row.get("证券代码") or "").zfill(6)
             title = row.get("公告标题") or row.get("标题")
             if len(code) == 6 and title:
-                news_by_code.setdefault(code, []).append({"date": day, "title": str(title)[:80], "type": str(row.get("公告类型") or row.get("类型") or "公司公告")})
+                news_by_code.setdefault(code, []).append({"date": day, "title": str(title)[:40], "type": str(row.get("公告类型") or row.get("类型") or "公司公告")[:12]})
     stocks = []
     for code, rows in source.get("bars", {}).items():
         item = analyse(code, source.get("names", {}).get(code, code), rows)
@@ -179,9 +237,10 @@ def build_payload(source):
                                  "totalMv": round_or_none(q.get("total_mv"), 0), "floatMv": round_or_none(q.get("float_mv"), 0),
                                  "asOf": (source.get("provisional") or {}).get("snapshot_at"), "source": (source.get("provisional") or {}).get("source")}
             item["industry"] = code_industry.get(code)
-            item["news"] = sorted(news_by_code.get(code, []), key=lambda x: x["date"], reverse=True)[:5]
+            item["news"] = sorted(news_by_code.get(code, []), key=lambda x: x["date"], reverse=True)[:2]
             words = (item["industry"] or "").replace("板块", "")
             item["themes"] = [words] if words else []
+            repair_levels(item)
             stocks.append(item)
     dates = [s["date"] for s in stocks]
     provisional = source.get("provisional") or {}
@@ -200,6 +259,13 @@ def main():
     os.makedirs(DOCS, exist_ok=True)
     source = json.load(open(DATA, encoding="utf-8"))
     payload = build_payload(source)
+    bad = {}
+    for item in payload["stocks"]:
+        for name in level_violations(item):
+            bad[name] = bad.get(name, 0) + 1
+    if bad:
+        print("LEVEL INVARIANTS FAILED", json.dumps(bad, ensure_ascii=False))
+        raise SystemExit(1)
     with open(os.path.join(DOCS, "monitor-data.json"), "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
     print("monitor-data.json", len(payload["stocks"]), "stocks", payload["marketDate"])
