@@ -190,7 +190,11 @@ def main():
         log('snapshot fetch failed', type(e).__name__, str(e)[:140])
     prov = apply_snapshot(bars, snap)
     log('snapshot', json.dumps(prov, ensure_ascii=False, default=str))
-    json.dump({'names': names, 'bars': bars, 'provisional': prov},
+    quote_metrics = {}
+    if snap:
+        for code, row in (snap.get('rows') or {}).items():
+            quote_metrics[code] = {k: row.get(k) for k in ('pe', 'pb', 'total_mv', 'float_mv', 'vol_ratio')}
+    json.dump({'names': names, 'bars': bars, 'provisional': prov, 'quote_metrics': quote_metrics},
               open(os.path.join(DATA, 'bars.json'), 'w', encoding='utf-8'), ensure_ascii=False)
     cal = sorted({r[0] for v in bars.values() for r in v})
     win = cal[-a.days:] if len(cal) > a.days else cal[:]

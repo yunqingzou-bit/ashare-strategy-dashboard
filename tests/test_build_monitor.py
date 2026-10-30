@@ -19,4 +19,11 @@ class MonitorTests(unittest.TestCase):
         self.assertLess(plan["invalidation"],item["price"])
         self.assertGreaterEqual(plan["secondTarget"],plan["firstTarget"])
         self.assertEqual(plan["horizon"],"1—2周")
+    def test_indicator_sets_are_explicit_daily_windows(self):
+        item=M.analyse("000001","测试",self.rows(True))
+        self.assertEqual(set(item["macdSet"]), {"day1","day2","day30","day60","day120"})
+        self.assertEqual(set(item["maSet"]), {"ma5","ma10","ma20","ma30","ma60","ma120"})
+        self.assertGreater(item["volumeSet"]["ratio5"], 0)
+        self.assertIsNotNone(item["macdSet"]["day1"])
+        self.assertIsNotNone(item["macdSet"]["day2"])
 if __name__ == "__main__": unittest.main()

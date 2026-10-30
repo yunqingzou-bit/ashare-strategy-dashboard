@@ -8,6 +8,8 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data", "bars.json")
 DOCS = os.path.join(ROOT, "docs")
+EVENTS = os.path.join(ROOT, "data", "events.json")
+INDUSTRY = os.path.join(ROOT, "data", "industry.json")
 
 
 def mean(values):
@@ -39,6 +41,16 @@ def round_or_none(value, digits=2):
     return None if value is None or not math.isfinite(value) else round(value, digits)
 
 
+def macd_window(values, window=None):
+    series = values[-window:] if window else values
+    if len(series) < 26:
+        return None
+    e12, e26 = ema(series, 12), ema(series, 26)
+    dif = [a-b for a, b in zip(e12, e26)]
+    dea = ema(dif, 9)
+    return (dif[-1] - dea[-1]) * 2
+
+
 def analyse(code, name, rows):
     if len(rows) < 30:
         return None
@@ -56,6 +68,8 @@ def analyse(code, name, rows):
     rsi14 = rsi(closes)
     vol5 = mean(volumes[-6:-1]) or 0
     vr = volumes[-1] / vol5 if vol5 else None
+    vol10 = mean(volumes[-11:-1]) or 0
+    vol20 = mean(volumes[-21:-1]) or 0
     support = min(lows[-20:])
     resistance = max(highs[-20:])
     price = closes[-1]
@@ -109,7 +123,21 @@ def analyse(code, name, rows):
         "turnover": round_or_none(float(last[7]), 2) if len(last) > 7 and last[7] is not None else None,
         "ma5": round_or_none(ma5), "ma10": round_or_none(ma10), "ma20": round_or_none(ma20),
         "rsi14": round_or_none(rsi14, 1), "macd": round_or_none(macd, 3),
-        "volumeRatio5": round_or_none(vr, 2), "support20": round_or_none(support),
+        "macdSet": {"day1": round_or_none(macd_window(closes), 3),
+                    "day2": round_or_none(macd_window(closes[:-1]), 3),
+                    "day30": round_or_none(macd_window(closes, 30), 3),
+                    "day60": round_or_none(macd_window(closes, 60), 3),
+                    "day120": round_or_none(macd_window(closes, 120), 3)},
+        "volumeRatio5": round_or_none(vr, 2),
+        "volumeSet": {"today": round_or_none(volumes[-1], 0), "avg5": round_or_none(vol5, 0),
+                      "avg10": round_or_none(vol10, 0), "avg20": round_or_none(vol20, 0),
+                      "ratio5": round_or_none(vr, 2),
+                      "ratio10": round_or_none(volumes[-1] / vol10 if vol10 else None, 2),
+                      "ratio20": round_or_none(volumes[-1] / vol20 if vol20 else None, 2)},
+        "maSet": {"ma5": round_or_none(ma5), "ma10": round_or_none(ma10), "ma20": round_or_none(ma20),
+                  "ma30": round_or_none(mean(closes[-30:])), "ma60": round_or_none(mean(closes[-60:])),
+                  "ma120": round_or_none(mean(closes[-120:])) if len(closes) >= 120 else None},
+        "support20": round_or_none(support),
         "resistance20": round_or_none(resistance), "score": score, "stance": stance,
         "reasons": reasons or ["暂无明确增强信号"], "risks": risks or ["未触发主要技术风险规则"],
         "wavePlan": {
@@ -123,10 +151,37 @@ def analyse(code, name, rows):
 
 
 def build_payload(source):
+    if os.path.exists(INDUSTRY):
+        with open(INDUSTRY, encoding="utf-8") as f:
+            industry = json.load(f)
+    else:
+        industry = {}
+    code_industry = {code: board for board, codes in industry.items() for code in codes}
+    if os.path.exists(EVENTS):
+        with open(EVENTS, encoding="utf-8") as f:
+            events = json.load(f)
+    else:
+        events = {}
+    notices = events.get("notices") or {}
+    news_by_code = {}
+    for day, rows in notices.items():
+        for row in rows:
+            code = str(row.get("代码") or row.get("股票代码") or row.get("证券代码") or "").zfill(6)
+            title = row.get("公告标题") or row.get("标题")
+            if len(code) == 6 and title:
+                news_by_code.setdefault(code, []).append({"date": day, "title": str(title)[:80], "type": str(row.get("公告类型") or row.get("类型") or "公司公告")})
     stocks = []
     for code, rows in source.get("bars", {}).items():
         item = analyse(code, source.get("names", {}).get(code, code), rows)
         if item:
+            q = (source.get("quote_metrics") or {}).get(code) or {}
+            item["valuation"] = {"pe": round_or_none(q.get("pe")), "pb": round_or_none(q.get("pb")),
+                                 "totalMv": round_or_none(q.get("total_mv"), 0), "floatMv": round_or_none(q.get("float_mv"), 0),
+                                 "asOf": (source.get("provisional") or {}).get("snapshot_at"), "source": (source.get("provisional") or {}).get("source")}
+            item["industry"] = code_industry.get(code)
+            item["news"] = sorted(news_by_code.get(code, []), key=lambda x: x["date"], reverse=True)[:5]
+            words = (item["industry"] or "").replace("板块", "")
+            item["themes"] = [words] if words else []
             stocks.append(item)
     dates = [s["date"] for s in stocks]
     provisional = source.get("provisional") or {}
