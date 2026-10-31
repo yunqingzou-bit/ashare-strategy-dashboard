@@ -41,6 +41,19 @@ def round_or_none(value, digits=2):
     return None if value is None or not math.isfinite(value) else round(value, digits)
 
 
+def sane_pe(value):
+    """Negative or absurd P/E means loss-making or unusable, so do not show a number."""
+    try:
+        pe = float(value)
+    except (TypeError, ValueError):
+        return None, None
+    if not math.isfinite(pe) or pe <= 0:
+        return None, "亏损或不适用"
+    if pe > 500:
+        return None, "估值异常"
+    return round(pe, 2), None
+
+
 def repair_levels(item):
     """Enforce invalidation < price < targets, and keep zones on the correct side."""
     plan = item["wavePlan"]
@@ -233,7 +246,8 @@ def build_payload(source):
         item = analyse(code, source.get("names", {}).get(code, code), rows)
         if item:
             q = (source.get("quote_metrics") or {}).get(code) or {}
-            item["valuation"] = {"pe": round_or_none(q.get("pe")), "pb": round_or_none(q.get("pb")),
+            pe, pe_flag = sane_pe(q.get("pe"))
+            item["valuation"] = {"pe": pe, "peFlag": pe_flag, "pb": round_or_none(q.get("pb")),
                                  "totalMv": round_or_none(q.get("total_mv"), 0), "floatMv": round_or_none(q.get("float_mv"), 0),
                                  "asOf": item["date"] + (" 收盘" if item["date"] else ""),
                                  "retrievedAt": (source.get("provisional") or {}).get("snapshot_at"),

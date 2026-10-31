@@ -60,4 +60,10 @@ class MonitorTests(unittest.TestCase):
             self.assertEqual(len(uni),2); self.assertNotIn("stocks",meta)
             shard=json.load(open(pathlib.Path(d)/"monitor"/"30.json",encoding="utf-8"))
             self.assertEqual(shard["stocks"][0]["code"],"300432")
+    def test_loss_making_pe_is_blank_not_huge_negative(self):
+        self.assertEqual(M.sane_pe(-72980.48), (None, "亏损或不适用"))
+        self.assertEqual(M.sane_pe(-1), (None, "亏损或不适用"))
+        self.assertEqual(M.sane_pe(1e6), (None, "估值异常"))
+        self.assertEqual(M.sane_pe(31.234), (31.23, None))
+        self.assertEqual(M.sane_pe(None), (None, None))
 if __name__ == "__main__": unittest.main()
