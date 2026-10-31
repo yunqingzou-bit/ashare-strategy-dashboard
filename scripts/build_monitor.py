@@ -285,6 +285,17 @@ def write_outputs(payload, docs_dir):
     meta = {k: v for k, v in payload.items() if k != "stocks"}
     with open(os.path.join(out, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, separators=(",", ":"))
+    stats = {
+        "stocks": len(payload["stocks"]),
+        "levelViolations": sum(len(level_violations(s)) for s in payload["stocks"]),
+        "peBlank": sum(1 for s in payload["stocks"] if (s.get("valuation") or {}).get("pe") is None),
+        "newsMissing": sum(1 for s in payload["stocks"] if not s.get("news")),
+        "aboveMa20": sum(1 for s in payload["stocks"] if s["wavePlan"].get("aboveMa20")),
+        "marketDate": payload.get("marketDate"),
+        "ruleVersion": payload.get("ruleVersion"),
+    }
+    with open(os.path.join(out, "stats.json"), "w", encoding="utf-8") as f:
+        json.dump(stats, f, ensure_ascii=False, separators=(",", ":"))
     legacy = os.path.join(docs_dir, "monitor-data.json")
     if os.path.exists(legacy):
         os.remove(legacy)
