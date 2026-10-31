@@ -6740,7 +6740,7 @@
   {
    "code": "603528",
    "name": "多伦科技",
-   "score": 80.62,
+   "score": 80.63,
    "cls": "zt_multi",
    "lb": 2,
    "close": 8.14,
@@ -7667,14 +7667,14 @@
   }
  },
  "baseline": {
-  "n": 1114663,
-  "mean_daily": -0.2974402419763506,
-  "p_up_daily": 0.4278799960167333
+  "n": 1115293,
+  "mean_daily": -0.2973186850278793,
+  "p_up_daily": 0.42788576634122155
  },
  "provisional": {
   "applied": false,
   "reason": "outside_session",
-  "snapshot_at": "2026-10-31 10:40:15",
+  "snapshot_at": "2026-10-31 10:59:36",
   "source": "tencent qt.gtimg.cn"
  }
 }
